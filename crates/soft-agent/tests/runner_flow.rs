@@ -25,15 +25,12 @@ fn runner_dispatches_and_executes_without_gate() {
         .state(json!({}))
         .mailbox(mailbox)
         .executor(executor)
-        .handle(
-            "Ping",
-            Box::new(|_state, msg| {
-                vec![Action::SendA2a {
-                    peer: msg.from.clone(),
-                    payload: json!({"reply": "pong"}),
-                }]
-            }),
-        )
+        .handle("Ping", |_state, msg| {
+            vec![Action::SendA2a {
+                peer: msg.from.clone(),
+                payload: json!({"reply": "pong"}),
+            }]
+        })
         .build()
         .expect("runner builds");
 
@@ -85,16 +82,13 @@ fn runner_denies_unknown_mcp_server() {
         .agent(agent)
         .state(json!({}))
         .mailbox(mailbox)
-        .handle(
-            "TryOcpp",
-            Box::new(|_state, _msg| {
-                vec![Action::CallMcp {
-                    server: "ocpp".into(),
-                    tool: "remote_start_transaction".into(),
-                    args: json!({}),
-                }]
-            }),
-        )
+        .handle("TryOcpp", |_state, _msg| {
+            vec![Action::CallMcp {
+                server: "ocpp".into(),
+                tool: "remote_start_transaction".into(),
+                args: json!({}),
+            }]
+        })
         .build()
         .unwrap();
 

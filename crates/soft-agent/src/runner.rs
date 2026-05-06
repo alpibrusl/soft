@@ -4,7 +4,8 @@
 //! Pipeline per inbound message:
 //!
 //! 1. Trace `a2a.received`.
-//! 2. Dispatch to the topic handler; collect proposed actions.
+//! 2. Dispatch to the topic handler (Rust closure or Lex function);
+//!    collect proposed actions.
 //! 3. For each action:
 //!    a. Trace `action.proposed`.
 //!    b. If a gate is configured, evaluate; trace `gate.verdict`.
@@ -14,22 +15,21 @@
 //!    d. Execute via the configured [`ActionExecutor`]; trace
 //!       `action.executed`.
 //!
-//! Trace records are flushed only at [`Runner::finalize`].
+//! Trace records are flushed at [`Runner::finalize`].
 
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::{
     Action, A2aMessage, Agent, Error, Mailbox,
     executor::{ActionExecutor, MockExecutor},
     gate::{action_to_json, Gate, Verdict},
+    lex_host::LexHost,
     trace::TraceWriter,
 };
-
-pub type Handler = Box<dyn FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send>;
 
 /// Builds scalar spec bindings for a (state, action) pair.
 ///
@@ -40,11 +40,24 @@ pub type Handler = Box<dyn FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send>
 /// fail to bind any quantifier and (typically) return Inconclusive.
 pub type BindingsFn = Box<dyn Fn(&Value, &Action) -> IndexMap<String, LexValue> + Send>;
 
+/// One topic handler. Either a Rust closure or the name of a Lex function
+/// that the runner will invoke via its [`LexHost`].
+pub enum Handler {
+    /// Native Rust closure. Mutates state directly; returns proposed actions.
+    Rust(Box<dyn FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send>),
+    /// Name of a Lex function compiled into the runner's `LexHost`.
+    /// The function is called with `(state, msg)` arguments and must
+    /// return a list of action records (see [`Action::from_json`] for
+    /// the expected record shape).
+    Lex(String),
+}
+
 pub struct Runner {
     agent: Agent,
     state: Value,
     mailbox: Mailbox,
     handlers: HashMap<String, Handler>,
+    lex_host: Option<LexHost>,
     gate: Option<Gate>,
     bindings_fn: BindingsFn,
     executor: Box<dyn ActionExecutor>,
@@ -65,17 +78,16 @@ impl Runner {
         };
         self.trace.record_effect(
             "a2a.received",
-            serde_json::json!({
-                "from": msg.from, "topic": msg.topic, "payload": msg.payload,
-            }),
+            json!({"from": msg.from, "topic": msg.topic, "payload": msg.payload}),
             Ok(Value::Null),
         );
 
-        let handler = self
-            .handlers
-            .get_mut(&msg.topic)
-            .ok_or_else(|| Error::HandlerNotRegistered(msg.topic.clone()))?;
-        let proposed = handler(&mut self.state, &msg);
+        let proposed = dispatch(
+            &mut self.state,
+            &mut self.handlers,
+            self.lex_host.as_ref(),
+            &msg,
+        )?;
 
         let mut allowed = 0usize;
         let mut denied = 0usize;
@@ -117,10 +129,7 @@ impl Runner {
             }
 
             // Execute
-            let outcome = self
-                .executor
-                .execute(action)
-                .map_err(|e| e.to_string());
+            let outcome = self.executor.execute(action).map_err(|e| e.to_string());
             self.trace.record_effect("action.executed", summary, outcome);
             allowed += 1;
         }
@@ -164,6 +173,50 @@ impl Runner {
     }
 }
 
+fn dispatch(
+    state: &mut Value,
+    handlers: &mut HashMap<String, Handler>,
+    lex_host: Option<&LexHost>,
+    msg: &A2aMessage,
+) -> Result<Vec<Action>, Error> {
+    let handler = handlers
+        .get_mut(&msg.topic)
+        .ok_or_else(|| Error::HandlerNotRegistered(msg.topic.clone()))?;
+    match handler {
+        Handler::Rust(f) => Ok(f(state, msg)),
+        Handler::Lex(fn_name) => {
+            let host = lex_host.ok_or_else(|| {
+                Error::InvalidConfig(format!(
+                    "Lex handler `{fn_name}` registered for `{}` but no lex_host on runner",
+                    msg.topic
+                ))
+            })?;
+            let state_v = LexValue::from_json(state);
+            // Always pass a fixed-shape message record so Lex handlers
+            // can declare a stable signature. The original payload is
+            // serialised to a JSON string so handlers can choose whether
+            // to parse it.
+            let msg_v = LexValue::from_json(&json!({
+                "from": msg.from,
+                "topic": msg.topic,
+                "payload_json": serde_json::to_string(&msg.payload)
+                    .unwrap_or_else(|_| "null".into()),
+            }));
+            let result = host.call(fn_name, vec![state_v, msg_v])?;
+            actions_from_lex_value(&result.value)
+        }
+    }
+}
+
+fn actions_from_lex_value(v: &LexValue) -> Result<Vec<Action>, Error> {
+    let LexValue::List(items) = v else {
+        return Err(Error::Spec(format!(
+            "Lex handler must return a List of action records, got {v:?}"
+        )));
+    };
+    items.iter().map(Action::from_lex_value).collect()
+}
+
 #[derive(Debug)]
 pub enum StepReport {
     Idle,
@@ -183,6 +236,7 @@ pub struct RunnerBuilder {
     state: Option<Value>,
     mailbox: Option<Mailbox>,
     handlers: HashMap<String, Handler>,
+    lex_host: Option<LexHost>,
     gate: Option<Gate>,
     bindings_fn: Option<BindingsFn>,
     executor: Option<Box<dyn ActionExecutor>>,
@@ -204,8 +258,33 @@ impl RunnerBuilder {
         self
     }
 
-    pub fn handle(mut self, topic: impl Into<String>, handler: Handler) -> Self {
-        self.handlers.insert(topic.into(), handler);
+    /// Register a Rust closure as the handler for `topic`.
+    pub fn handle<F>(mut self, topic: impl Into<String>, handler: F) -> Self
+    where
+        F: FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send + 'static,
+    {
+        self.handlers
+            .insert(topic.into(), Handler::Rust(Box::new(handler)));
+        self
+    }
+
+    /// Register a Lex function as the handler for `topic`. The function
+    /// must exist in the runner's [`LexHost`] (configured via
+    /// [`Self::lex_host`]) and have the signature
+    /// `fn(state, msg) -> List[ActionRecord]`.
+    pub fn handle_lex(
+        mut self,
+        topic: impl Into<String>,
+        fn_name: impl Into<String>,
+    ) -> Self {
+        self.handlers
+            .insert(topic.into(), Handler::Lex(fn_name.into()));
+        self
+    }
+
+    /// Provide the [`LexHost`] used to dispatch Lex handlers.
+    pub fn lex_host(mut self, host: LexHost) -> Self {
+        self.lex_host = Some(host);
         self
     }
 
@@ -232,9 +311,16 @@ impl RunnerBuilder {
         let mailbox = self
             .mailbox
             .ok_or_else(|| Error::InvalidConfig("missing mailbox".into()))?;
-        let executor = self
-            .executor
-            .unwrap_or_else(|| Box::new(MockExecutor::new()));
+
+        // Validate: every Lex handler needs a lex_host.
+        let has_lex = self.handlers.values().any(|h| matches!(h, Handler::Lex(_)));
+        if has_lex && self.lex_host.is_none() {
+            return Err(Error::InvalidConfig(
+                "Lex handler registered but no lex_host provided".into(),
+            ));
+        }
+
+        let executor = self.executor.unwrap_or_else(|| Box::new(MockExecutor::new()));
         let bindings_fn = self
             .bindings_fn
             .unwrap_or_else(|| Box::new(|_, _| IndexMap::new()));
@@ -248,6 +334,7 @@ impl RunnerBuilder {
             state,
             mailbox,
             handlers: self.handlers,
+            lex_host: self.lex_host,
             gate: self.gate,
             bindings_fn,
             executor,

@@ -129,25 +129,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             m
         }))
         .executor(Box::new(MockExecutor::new()))
-        .handle(
-            "RequestSession",
-            Box::new(|_state, msg| {
-                let power_kw = msg
-                    .payload
-                    .get("power_kw")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(50.0);
-                vec![Action::CallMcp {
-                    server: "ocpp".into(),
-                    tool: "remote_start_transaction".into(),
-                    args: json!({
-                        "charger_id": "charger-1",
-                        "vehicle_id": msg.payload.get("vehicle_id"),
-                        "power_kw": power_kw,
-                    }),
-                }]
-            }),
-        )
+        .handle("RequestSession", |_state, msg| {
+            let power_kw = msg
+                .payload
+                .get("power_kw")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(50.0);
+            vec![Action::CallMcp {
+                server: "ocpp".into(),
+                tool: "remote_start_transaction".into(),
+                args: json!({
+                    "charger_id": "charger-1",
+                    "vehicle_id": msg.payload.get("vehicle_id"),
+                    "power_kw": power_kw,
+                }),
+            }]
+        })
         .build()?;
 
     // ---------- Round 1: 30 kW request — fits (80+30=110 ≤ 120) ----------
