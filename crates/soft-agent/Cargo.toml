@@ -26,3 +26,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
+
+[[bin]]
+name = "soft-replay"
+path = "src/bin/soft_replay.rs"

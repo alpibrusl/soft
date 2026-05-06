@@ -81,6 +81,7 @@ fn action_effect_mapping() {
         (
             Action::SendA2a {
                 peer: "depot".into(),
+                topic: "Probe".into(),
                 payload: serde_json::json!({}),
             },
             Effect::A2a,

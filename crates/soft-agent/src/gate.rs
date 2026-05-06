@@ -96,8 +96,8 @@ pub(crate) fn action_to_json(action: &Action) -> serde_json::Value {
         Action::CallMcp { server, tool, args } => serde_json::json!({
             "kind": "call_mcp", "server": server, "tool": tool, "args": args,
         }),
-        Action::SendA2a { peer, payload } => serde_json::json!({
-            "kind": "send_a2a", "peer": peer, "payload": payload,
+        Action::SendA2a { peer, topic, payload } => serde_json::json!({
+            "kind": "send_a2a", "peer": peer, "topic": topic, "payload": payload,
         }),
         Action::LocalLlm { prompt } => serde_json::json!({
             "kind": "local_llm", "prompt": prompt,

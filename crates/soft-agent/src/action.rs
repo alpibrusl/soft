@@ -27,6 +27,7 @@ pub enum Action {
     },
     SendA2a {
         peer: String,
+        topic: String,
         payload: Value,
     },
     LocalLlm {
@@ -81,6 +82,7 @@ impl Action {
             }),
             "send_a2a" => Ok(Action::SendA2a {
                 peer: s("peer"),
+                topic: s("a2a_topic"),
                 payload: parse_json_str_field("payload_json"),
             }),
             "local_llm" => Ok(Action::LocalLlm { prompt: s("prompt") }),

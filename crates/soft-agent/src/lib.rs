@@ -24,6 +24,8 @@ pub mod executor;
 pub mod gate;
 pub mod lex_host;
 pub mod mailbox;
+pub mod replay;
+pub mod router;
 pub mod runner;
 pub mod trace;
 
@@ -35,5 +37,6 @@ pub use executor::{ActionExecutor, ExecError, MockExecutor};
 pub use gate::{Gate, Verdict};
 pub use lex_host::{LexCall, LexHost};
 pub use mailbox::{A2aMessage, Mailbox, MailboxSender};
+pub use router::{InProcessExecutor, InProcessRouter};
 pub use runner::{BindingsFn, DrainReport, Handler, Runner, RunnerBuilder, StepReport};
 pub use trace::TraceWriter;
