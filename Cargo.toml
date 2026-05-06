@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/soft-agent",
+    "crates/soft-a2a",
+]
+
+[workspace.package]
+edition = "2021"
+license = "EUPL-1.2"
+rust-version = "1.80"
+authors = ["soft contributors"]
+repository = "https://github.com/alpibrusl/soft"
+
+[workspace.dependencies]
+# Awaiting lex-lang issues #184–#187. Once those land, uncomment and pin:
+# lex-types   = { git = "https://github.com/alpibrusl/lex-lang", branch = "main" }
+# lex-runtime = { git = "https://github.com/alpibrusl/lex-lang", branch = "main" }
+# lex-trace   = { git = "https://github.com/alpibrusl/lex-lang", branch = "main" }
+# lex-vcs     = { git = "https://github.com/alpibrusl/lex-lang", branch = "main" }
+# lex-api     = { git = "https://github.com/alpibrusl/lex-lang", branch = "main" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

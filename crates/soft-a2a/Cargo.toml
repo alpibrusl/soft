@@ -1,0 +1,20 @@
+[package]
+name = "soft-a2a"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "A2A protocol surface for soft agents. Pins one A2A version; uses lex-api as a library."
+publish = false
+
+[dependencies]
+# soft-agent = { path = "../soft-agent" }   # uncomment when soft-agent has a public API
+#
+# Awaiting lex-lang:
+# - #184 the [a2a] effect tag
+# - #187 lex-trace integration for inbound/outbound message audit
+#
+# Once lex-api is depended on:
+# lex-api = { workspace = true }
