@@ -345,6 +345,15 @@ impl RunnerBuilder {
         self
     }
 
+    /// Returns the agent's declared name once an agent has been set —
+    /// useful for callers that need to construct an executor or trace
+    /// writer keyed by the agent's identity *before* `.build()` consumes
+    /// the builder (e.g. `A2aRoutedExecutor::new(name, peers)` in
+    /// [`soft-runner`]).
+    pub fn agent_name(&self) -> Option<&str> {
+        self.agent.as_ref().map(|a| a.id().as_str())
+    }
+
     pub fn state(mut self, state: Value) -> Self {
         self.state = Some(state);
         self

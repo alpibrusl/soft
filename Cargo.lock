@@ -1622,6 +1622,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "soft-runner"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "soft-a2a",
+ "soft-agent",
+]
+
+[[package]]
 name = "spec-checker"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
