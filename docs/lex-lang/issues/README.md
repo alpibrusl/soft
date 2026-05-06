@@ -1,13 +1,32 @@
 # Lex-lang issues
 
-Four issues filed in [`alpibrusl/lex-lang`](https://github.com/alpibrusl/lex-lang/issues) to support the soft Phase 1 demo. Bodies mirrored here for traceability and to preserve the cross-references back into soft.
+Issues we've filed (or drafted) against [`alpibrusl/lex-lang`](https://github.com/alpibrusl/lex-lang/issues) in support of soft.
+
+## Filed and closed (in v0.2.0)
 
 | GitHub | File | Title |
 |---|---|---|
-| [#184](https://github.com/alpibrusl/lex-lang/issues/184) | [184-effect-tags.md](./184-effect-tags.md) | Add effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]` |
+| [#184](https://github.com/alpibrusl/lex-lang/issues/184) | [184-effect-tags.md](./184-effect-tags.md) | Add effect tags `[a2a]`, `[mcp]`, `[llm_local]`, `[llm_cloud]` |
 | [#185](https://github.com/alpibrusl/lex-lang/issues/185) | [185-mcp-tool-registry-wrapper.md](./185-mcp-tool-registry-wrapper.md) | MCP server wrapper for Tool Registry |
 | [#186](https://github.com/alpibrusl/lex-lang/issues/186) | [186-spec-checker-runtime-gate.md](./186-spec-checker-runtime-gate.md) | Wire `spec-checker` as a runtime action gate |
 | [#187](https://github.com/alpibrusl/lex-lang/issues/187) | [187-lex-trace-vcs-integration.md](./187-lex-trace-vcs-integration.md) | Clarify `lex-trace` ↔ `lex-vcs` integration |
+
+## Open follow-ups (filed by lex-lang in response to our expectations doc)
+
+| GitHub | Title |
+|---|---|
+| [#196](https://github.com/alpibrusl/lex-lang/issues/196) | LLM provider configuration |
+| [#197](https://github.com/alpibrusl/lex-lang/issues/197) | `agent.call_mcp` connection cache |
+| [#198](https://github.com/alpibrusl/lex-lang/issues/198) | Edge runtime cross-compile + verified aarch64 binaries |
+
+## Drafts (to file)
+
+Drafts surfaced while building soft-agent v0–v3 and soft-a2a v0. Bodies in [`drafts/`](./drafts/); paste each into a new issue at `https://github.com/alpibrusl/lex-lang/issues/new`. Once filed, rename the file to `<number>-<topic>.md` and move it out of `drafts/` next to the others.
+
+| File | Title (proposed) | Priority |
+|---|---|---|
+| [drafts/spec-checker-tracer-hook.md](./drafts/spec-checker-tracer-hook.md) | `spec-checker`: optional Tracer hook for `evaluate_gate*` | High — unblocks audit replay of spec helper calls. |
+| [drafts/parser-underscore-handling.md](./drafts/parser-underscore-handling.md) | Parser: allow `_name` and `let _` for unused-binding ergonomics | Low — papercuts only, current workarounds work. |
 
 ## Two original drafts not filed upstream
 
