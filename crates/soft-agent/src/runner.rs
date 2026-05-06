@@ -85,6 +85,29 @@ impl Runner {
         RunnerBuilder::default()
     }
 
+    /// Construct a [`RunnerBuilder`] from a Lex source file declaring an
+    /// agent via the soft-agent DSL (see [`crate::lex_dsl`]). The user's
+    /// source is prepended with [`crate::DSL_PREAMBLE`] and compiled into
+    /// a [`LexHost`]; its `config()` function is invoked to produce the
+    /// agent's [`AgentConfig`]; and each handler entry is registered as
+    /// `handle_lex(topic, fn_name)`.
+    ///
+    /// The caller still supplies `mailbox`, `state`, `gate`, `bindings_fn`,
+    /// `executor`, etc. via the returned builder.
+    pub fn from_lex_source(user_src: &str) -> Result<RunnerBuilder, Error> {
+        let combined = format!("{}\n{}", crate::DSL_PREAMBLE, user_src);
+        let host = LexHost::from_source(&combined)?;
+        let result = host.call("config", Vec::new())?;
+        let setup = crate::lex_dsl::parse_lex_config(&result.value)?;
+        let mut builder = RunnerBuilder::default()
+            .agent(setup.config.build()?)
+            .lex_host(host);
+        for (topic, fn_name) in setup.handlers {
+            builder = builder.handle_lex(topic, fn_name);
+        }
+        Ok(builder)
+    }
+
     /// Process at most one inbound message. Returns [`StepReport::Idle`]
     /// if the mailbox is empty.
     pub fn step(&mut self) -> Result<StepReport, Error> {
