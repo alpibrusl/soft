@@ -11,11 +11,18 @@ publish = false
 
 [dependencies]
 # lex-lang v0.2.0 — primitives we build on.
-lex-bytecode = { workspace = true }   # Vm, Tracer, Value (spec bindings)
-lex-runtime  = { workspace = true }   # capability policy, effect handler
+lex-syntax   = { workspace = true }   # parse host program for the gate
+lex-ast      = { workspace = true }   # canonicalize_program
+lex-types    = { workspace = true }   # check_program
+lex-bytecode = { workspace = true }   # Value, compile_program, Program
+lex-runtime  = { workspace = true }   # Vm (next slice; pulled in by spec-checker today)
 lex-store    = { workspace = true }   # Store::save_trace
-lex-trace    = { workspace = true }   # Recorder, RunId
-spec-checker = { workspace = true }   # evaluate_gate, GateVerdict
+lex-trace    = { workspace = true }   # Recorder, RunId, TraceTree
+spec-checker = { workspace = true }   # evaluate_gate_compiled, GateVerdict, parse_spec, Spec
 
 indexmap   = { workspace = true }
+serde      = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

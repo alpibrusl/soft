@@ -7,6 +7,8 @@ pub enum Error {
     InvalidConfig(String),
     HandlerNotRegistered(String),
     MailboxClosed,
+    Spec(String),
+    Trace(String),
 }
 
 impl fmt::Display for Error {
@@ -15,6 +17,8 @@ impl fmt::Display for Error {
             Error::InvalidConfig(msg) => write!(f, "invalid agent config: {msg}"),
             Error::HandlerNotRegistered(topic) => write!(f, "no handler for topic {topic}"),
             Error::MailboxClosed => write!(f, "mailbox closed"),
+            Error::Spec(msg) => write!(f, "spec error: {msg}"),
+            Error::Trace(msg) => write!(f, "trace error: {msg}"),
         }
     }
 }
