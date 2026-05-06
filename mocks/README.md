@@ -21,13 +21,58 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run a single mock (stdio)
+## Driving a mock manually
+
+### MCP Inspector (browser UI)
+
+The fastest way to poke a mock by hand. The inspector spawns the mock as a stdio child and opens a browser tab where you can discover tools, call them, and see results.
 
 ```
-python optimizer.py
+npx @modelcontextprotocol/inspector python mocks/optimizer.py
 ```
 
-You can drive it with [Claude Desktop](https://www.anthropic.com/claude) or any MCP client.
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "soft-optimizer": {
+      "command": "python",
+      "args": ["/absolute/path/to/soft/mocks/optimizer.py"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop; the mock's tools appear in the tool palette.
+
+### Programmatic (Python)
+
+```python
+import asyncio
+from mcp import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
+
+async def main():
+    params = StdioServerParameters(command="python", args=["mocks/optimizer.py"])
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            print(await session.list_tools())
+            print(await session.call_tool(
+                "schedule_session",
+                {
+                    "vehicle_id": "v-1",
+                    "arrival_time": "2026-05-06T10:00:00",
+                    "energy_kwh": 30.0,
+                    "deadline": "2026-05-06T16:00:00",
+                },
+            ))
+
+asyncio.run(main())
+```
 
 ## Run from the demo runner (hypothetical, lands with `soft-agent`)
 
@@ -39,6 +84,18 @@ soft run-demo ../examples/phase1/ \
   --mcp tms_db="python mocks/tms_db.py" \
   --mcp local_planner="python mocks/local_planner.py"
 ```
+
+## Tests
+
+End-to-end smoke tests for each mock via the MCP stdio transport live in [`../tests/test_mocks.py`](../tests/test_mocks.py).
+
+```
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r ../tests/requirements.txt
+pytest
+```
+
+The suite spawns each mock as a subprocess, connects an MCP client, calls each tool, and asserts the response shape. Passes today (10/10).
 
 ## Replacing with real services
 
