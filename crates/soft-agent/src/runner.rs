@@ -18,14 +18,14 @@
 //! Trace records are flushed at [`Runner::finalize`].
 
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
 use serde_json::{json, Value};
 
 use crate::{
-    Action, A2aMessage, Agent, Error, Mailbox,
+    Action, A2aMessage, Agent, Error, Mailbox, MailboxSender,
     executor::{ActionExecutor, MockExecutor},
     gate::{action_to_json, Gate, Verdict},
     lex_host::LexHost,
@@ -256,10 +256,6 @@ fn dispatch(
                 ))
             })?;
             let state_v = LexValue::from_json(state);
-            // Always pass a fixed-shape message record so Lex handlers
-            // can declare a stable signature. The original payload is
-            // serialised to a JSON string so handlers can choose whether
-            // to parse it.
             let msg_v = LexValue::from_json(&json!({
                 "from": msg.from,
                 "topic": msg.topic,
@@ -267,18 +263,44 @@ fn dispatch(
                     .unwrap_or_else(|_| "null".into()),
             }));
             let result = host.call(fn_name, vec![state_v, msg_v])?;
-            actions_from_lex_value(&result.value)
+            let (actions, new_state) = interpret_lex_result(&result.value)?;
+            if let Some(ns) = new_state {
+                *state = ns;
+            }
+            Ok(actions)
         }
     }
 }
 
-fn actions_from_lex_value(v: &LexValue) -> Result<Vec<Action>, Error> {
-    let LexValue::List(items) = v else {
-        return Err(Error::Spec(format!(
-            "Lex handler must return a List of action records, got {v:?}"
-        )));
-    };
-    items.iter().map(Action::from_lex_value).collect()
+/// Interpret a Lex handler's return value.
+///
+/// Two shapes are accepted:
+/// - **Stateless**: `List[ActionRecord]`. The handler proposed actions
+///   and didn't change state.
+/// - **Stateful**: `{ state: S, actions: List[ActionRecord] }`. The
+///   handler proposed actions *and* returned a replacement state record.
+///
+/// Stateful is detected by the result being a `Record` with both
+/// `state` and `actions` fields. Otherwise we expect a `List`.
+fn interpret_lex_result(v: &LexValue) -> Result<(Vec<Action>, Option<Value>), Error> {
+    let json = v.to_json();
+    if let Value::Object(map) = &json {
+        if let (Some(actions_v), Some(state_v)) = (map.get("actions"), map.get("state")) {
+            let actions = actions_from_json_array(actions_v)?;
+            return Ok((actions, Some(state_v.clone())));
+        }
+    }
+    let actions = actions_from_json_array(&json)?;
+    Ok((actions, None))
+}
+
+fn actions_from_json_array(v: &Value) -> Result<Vec<Action>, Error> {
+    let arr = v.as_array().ok_or_else(|| {
+        Error::Spec(format!(
+            "Lex handler return must be a list of action records (or {{state, actions}}), got: {v}"
+        ))
+    })?;
+    arr.iter().map(Action::from_json).collect()
 }
 
 #[derive(Debug)]
@@ -304,6 +326,17 @@ pub struct RunnerBuilder {
     gate: Option<Gate>,
     bindings_fn: Option<BindingsFn>,
     executor: Option<Box<dyn ActionExecutor>>,
+    ticks: Vec<TickSpec>,
+}
+
+/// One periodic tick configured on the runner. The tick thread sends a
+/// synthetic [`A2aMessage`] (`from = "self"`, payload = `null`) on the
+/// configured `topic` every `duration`. The thread exits when the
+/// mailbox is closed (i.e. the [`Runner`] is dropped).
+struct TickSpec {
+    duration: Duration,
+    topic: String,
+    sender: MailboxSender,
 }
 
 impl RunnerBuilder {
@@ -367,6 +400,28 @@ impl RunnerBuilder {
         self
     }
 
+    /// Register a periodic self-tick. Every `duration`, the runner's
+    /// mailbox receives an [`A2aMessage`] with `from = "self"`, the given
+    /// `topic`, and a `null` payload. Useful for self-initiated agents
+    /// (heartbeats, periodic broadcasts, scheduled dispatch).
+    ///
+    /// The `sender` must be a clone of the same `MailboxSender` returned
+    /// by [`Mailbox::new`] for this runner. The tick thread exits when
+    /// the mailbox is closed (i.e. the [`Runner`] is dropped).
+    pub fn tick(
+        mut self,
+        duration: Duration,
+        topic: impl Into<String>,
+        sender: MailboxSender,
+    ) -> Self {
+        self.ticks.push(TickSpec {
+            duration,
+            topic: topic.into(),
+            sender,
+        });
+        self
+    }
+
     pub fn build(self) -> Result<Runner, Error> {
         let agent = self
             .agent
@@ -393,6 +448,24 @@ impl RunnerBuilder {
             agent.id().as_str().to_string(),
             state.clone(),
         );
+
+        // Spawn one detached thread per tick. They exit when the mailbox
+        // is closed (mpsc::Sender::send returns Err once the receiver is
+        // dropped).
+        for spec in self.ticks {
+            std::thread::spawn(move || loop {
+                std::thread::sleep(spec.duration);
+                let msg = A2aMessage {
+                    from: "self".to_string(),
+                    topic: spec.topic.clone(),
+                    payload: Value::Null,
+                };
+                if spec.sender.send(msg).is_err() {
+                    break;
+                }
+            });
+        }
+
         Ok(Runner {
             agent,
             state,
