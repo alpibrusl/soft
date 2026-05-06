@@ -28,6 +28,7 @@ fn runner_dispatches_and_executes_without_gate() {
         .handle("Ping", |_state, msg| {
             vec![Action::SendA2a {
                 peer: msg.from.clone(),
+                topic: "Pong".into(),
                 payload: json!({"reply": "pong"}),
             }]
         })

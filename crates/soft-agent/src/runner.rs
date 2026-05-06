@@ -18,6 +18,7 @@
 //! Trace records are flushed at [`Runner::finalize`].
 
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
@@ -30,6 +31,21 @@ use crate::{
     lex_host::LexHost,
     trace::TraceWriter,
 };
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn bindings_to_json(b: &IndexMap<String, LexValue>) -> Value {
+    let mut obj = serde_json::Map::new();
+    for (k, v) in b {
+        obj.insert(k.clone(), v.to_json());
+    }
+    Value::Object(obj)
+}
 
 /// Builds scalar spec bindings for a (state, action) pair.
 ///
@@ -69,6 +85,29 @@ impl Runner {
         RunnerBuilder::default()
     }
 
+    /// Construct a [`RunnerBuilder`] from a Lex source file declaring an
+    /// agent via the soft-agent DSL (see [`crate::lex_dsl`]). The user's
+    /// source is prepended with [`crate::DSL_PREAMBLE`] and compiled into
+    /// a [`LexHost`]; its `config()` function is invoked to produce the
+    /// agent's [`AgentConfig`]; and each handler entry is registered as
+    /// `handle_lex(topic, fn_name)`.
+    ///
+    /// The caller still supplies `mailbox`, `state`, `gate`, `bindings_fn`,
+    /// `executor`, etc. via the returned builder.
+    pub fn from_lex_source(user_src: &str) -> Result<RunnerBuilder, Error> {
+        let combined = format!("{}\n{}", crate::DSL_PREAMBLE, user_src);
+        let host = LexHost::from_source(&combined)?;
+        let result = host.call("config", Vec::new())?;
+        let setup = crate::lex_dsl::parse_lex_config(&result.value)?;
+        let mut builder = RunnerBuilder::default()
+            .agent(setup.config.build()?)
+            .lex_host(host);
+        for (topic, fn_name) in setup.handlers {
+            builder = builder.handle_lex(topic, fn_name);
+        }
+        Ok(builder)
+    }
+
     /// Process at most one inbound message. Returns [`StepReport::Idle`]
     /// if the mailbox is empty.
     pub fn step(&mut self) -> Result<StepReport, Error> {
@@ -101,9 +140,34 @@ impl Runner {
             let gate_ok = match &self.gate {
                 Some(gate) => {
                     let bindings = (self.bindings_fn)(&self.state, action);
-                    let verdict = gate.evaluate(&bindings);
-                    let verdict_json =
-                        serde_json::to_value(&verdict).unwrap_or(Value::Null);
+
+                    // Per-action spec recorder so the spec body's
+                    // helper calls (under_budget → projected_load + ...)
+                    // show up nested in our trace via spec-checker
+                    // 0.2.1's evaluate_gate_compiled_traced.
+                    let spec_recorder = lex_trace::Recorder::new();
+                    let spec_handle = spec_recorder.handle();
+                    let h_for_closure = spec_handle.clone();
+                    let spec_started = now_ms();
+                    let verdict = gate.evaluate_traced(&bindings, move || {
+                        Box::new(h_for_closure.clone())
+                            as Box<dyn lex_bytecode::vm::Tracer>
+                    });
+                    let spec_ended = now_ms();
+                    let spec_tree = spec_handle.finalize(
+                        "spec.eval".to_string(),
+                        bindings_to_json(&bindings),
+                        Some(serde_json::to_value(&verdict).unwrap_or(Value::Null)),
+                        None,
+                        spec_started,
+                        spec_ended,
+                    );
+                    let verdict_json = json!({
+                        "verdict": serde_json::to_value(&verdict)
+                            .unwrap_or(Value::Null),
+                        "spec_trace": serde_json::to_value(&spec_tree)
+                            .unwrap_or(Value::Null),
+                    });
                     self.trace
                         .record_effect("gate.verdict", summary.clone(), Ok(verdict_json));
                     matches!(verdict, Verdict::Allow)

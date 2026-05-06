@@ -26,6 +26,7 @@ type ActionRecord = {
   tool         :: Str,
   args_json    :: Str,
   peer         :: Str,
+  a2a_topic    :: Str,
   payload_json :: Str,
   prompt       :: Str,
 }
@@ -40,6 +41,7 @@ fn on_ping(
     tool:         "",
     args_json:    "",
     peer:         msg.from,
+    a2a_topic:    "Pong",
     payload_json: "{\"reply\":\"pong\"}",
     prompt:       "",
   }]

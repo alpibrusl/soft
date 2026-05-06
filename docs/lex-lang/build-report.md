@@ -7,7 +7,7 @@ A short status update. Soft built `soft-agent` v0–v3 and `soft-a2a` v0 against
 
 ## 1. Status snapshot
 
-- Workspace pinned at `lex-lang = "0.2"`. `cargo check --workspace` clean.
+- Workspace pinned at `lex-lang = "0.2"` (currently resolves to **v0.2.1** for `spec-checker` and `lex-trace` after their tracer-hook patch landed; rest of the family at 0.2.0/0.2.1). `cargo check --workspace` clean.
 - **`soft-agent` v3** — agent type + builder + mailbox; runner with Rust *and* Lex handler dispatch; spec gate via `spec-checker::evaluate_gate_compiled`; trace via `lex_trace::Recorder` + `lex_store::Store::save_trace`; `LexHost` for invoking Lex code under our own `Vm + Recorder`.
 - **`soft-a2a` v0** — `tiny_http` server + `ureq` client, A2A `Message` / `Part` / `AgentCard` schema pinned at `A2A_VERSION = "0.2"`, agent-card endpoint, mailbox forwarding.
 - Tests: 28 Rust tests + 10 Python pytest, all green. End-to-end integration test (`crates/soft-a2a/tests/integration.rs`) drives an external A2A client → soft-a2a server → soft-agent mailbox → Lex handler → executor → persisted trace.
@@ -24,11 +24,9 @@ A short status update. Soft built `soft-agent` v0–v3 and `soft-a2a` v0 against
 
 Two real friction points; drafts ready to file in `issues/drafts/`.
 
-### 3.1 `spec-checker`'s eval `Vm` has no `Tracer` hook (high priority)
+### 3.1 `spec-checker`'s eval `Vm` has no `Tracer` hook (resolved upstream in v0.2.1)
 
-When a gate's spec body calls a host helper, the nested helpers don't appear in soft-agent's overall trace — only the leaf gate verdict does. We reproduce the desired pattern via `LexHost` (where soft-agent owns the `Vm`), so we know it works; just not through `evaluate_gate*`.
-
-Draft: [`issues/drafts/spec-checker-tracer-hook.md`](./issues/drafts/spec-checker-tracer-hook.md). Short version: take an opt-in `&Recorder` (or `Box<dyn Tracer>`) in `evaluate_gate_compiled` and pass it through to the internal `Vm::set_tracer`.
+Originally drafted as a high-priority ask. Shipped same day as `spec_checker::evaluate_gate_compiled_traced(specs, bindings, bc, new_tracer: Fn() -> Box<dyn Tracer>)`, plus `impl Tracer for lex_trace::Handle` so multiple tracers can share recorder state via `Arc<Mutex>`. Wired into `soft_agent::Gate::evaluate_traced` and the runner's per-action gate path; verified by [`crates/soft-agent/tests/gate_traced.rs`](../../crates/soft-agent/tests/gate_traced.rs) (spec body's helper calls — `projected_load`, `budget_total` — appear as nested calls in the recorder's tree). Draft preserved at [`issues/drafts/spec-checker-tracer-hook.md`](./issues/drafts/spec-checker-tracer-hook.md) for historical context.
 
 ### 3.2 Parser rejects underscore-prefixed identifiers (low priority)
 

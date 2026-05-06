@@ -25,8 +25,13 @@ Drafts surfaced while building soft-agent v0–v3 and soft-a2a v0. Bodies in [`d
 
 | File | Title (proposed) | Priority |
 |---|---|---|
-| [drafts/spec-checker-tracer-hook.md](./drafts/spec-checker-tracer-hook.md) | `spec-checker`: optional Tracer hook for `evaluate_gate*` | High — unblocks audit replay of spec helper calls. |
 | [drafts/parser-underscore-handling.md](./drafts/parser-underscore-handling.md) | Parser: allow `_name` and `let _` for unused-binding ergonomics | Low — papercuts only, current workarounds work. |
+
+## Resolved before filing
+
+| Topic | Resolution |
+|---|---|
+| [drafts/spec-checker-tracer-hook.md](./drafts/spec-checker-tracer-hook.md) | Shipped in lex-lang v0.2.1 as `spec_checker::evaluate_gate_compiled_traced` + `impl Tracer for lex_trace::Handle`. Wired through `soft_agent::Gate::evaluate_traced` and the runner's per-action gate path. |
 
 ## Two original drafts not filed upstream
 

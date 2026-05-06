@@ -1,10 +1,8 @@
-# Draft — `spec-checker`: optional Tracer hook for `evaluate_gate*`
+# `spec-checker`: optional Tracer hook for `evaluate_gate*`
 
-> **Status:** Draft, not yet filed. Will become the next open issue (#199 or thereabouts).
-> **Repository:** `alpibrusl/lex-lang`
-> **Title:** `` spec-checker: accept an optional Tracer in evaluate_gate*` ``
-> **Suggested labels:** `spec-checker`, `lex-trace`, `enhancement`
-> **Source:** `alpibrusl/soft:crates/soft-agent/src/{gate.rs,lex_host.rs}`
+> **Status:** **Resolved upstream in `lex-lang` v0.2.1** before filing. Draft preserved for historical context.
+>
+> The lex-lang team shipped `spec_checker::evaluate_gate_compiled_traced(specs, bindings, bc, new_tracer: Fn() -> Box<dyn Tracer>)` and made `lex_trace::Handle` impl `Tracer` so multiple tracers can share recorder state via `Arc<Mutex>`. Wired through soft-agent in [`crates/soft-agent/src/gate.rs`](../../../crates/soft-agent/src/gate.rs)'s `Gate::evaluate_traced` and the runner's per-action gate path. Test: [`crates/soft-agent/tests/gate_traced.rs`](../../../crates/soft-agent/tests/gate_traced.rs).
 
 ---
 

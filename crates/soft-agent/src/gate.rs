@@ -7,7 +7,9 @@
 
 use indexmap::IndexMap;
 use lex_bytecode::Value;
-use spec_checker::{evaluate_gate_compiled, parse_spec, Spec};
+use spec_checker::{
+    evaluate_gate_compiled, evaluate_gate_compiled_traced, parse_spec, Spec,
+};
 
 use crate::{Action, Error};
 
@@ -52,6 +54,37 @@ impl Gate {
         evaluate_gate_compiled(&self.specs, bindings, &self.program)
     }
 
+    /// Like [`Self::evaluate`] but threads a tracer through every `Vm`
+    /// that the spec body spins up to call host helpers
+    /// (`SpecExpr::Call`). The `new_tracer` closure is called once per
+    /// helper invocation and must return a fresh `Box<dyn Tracer>` that
+    /// shares state with whatever recorder the caller plans to finalize.
+    ///
+    /// Typical usage closes over a [`lex_trace::Recorder`]'s handle:
+    ///
+    /// ```ignore
+    /// let recorder = lex_trace::Recorder::new();
+    /// let handle = recorder.handle();
+    /// let h = handle.clone();
+    /// let verdict = gate.evaluate_traced(&bindings, move || {
+    ///     Box::new(h.clone()) as Box<dyn lex_bytecode::vm::Tracer>
+    /// });
+    /// let tree = handle.finalize(/* ... */);
+    /// ```
+    ///
+    /// Available since `spec-checker` 0.2.1 (closes the soft-side
+    /// tracer-hook ask).
+    pub fn evaluate_traced<F>(
+        &self,
+        bindings: &IndexMap<String, Value>,
+        new_tracer: F,
+    ) -> Verdict
+    where
+        F: Fn() -> Box<dyn lex_bytecode::vm::Tracer>,
+    {
+        evaluate_gate_compiled_traced(&self.specs, bindings, &self.program, new_tracer)
+    }
+
     /// Number of specs registered.
     pub fn spec_count(&self) -> usize {
         self.specs.len()
@@ -63,8 +96,8 @@ pub(crate) fn action_to_json(action: &Action) -> serde_json::Value {
         Action::CallMcp { server, tool, args } => serde_json::json!({
             "kind": "call_mcp", "server": server, "tool": tool, "args": args,
         }),
-        Action::SendA2a { peer, payload } => serde_json::json!({
-            "kind": "send_a2a", "peer": peer, "payload": payload,
+        Action::SendA2a { peer, topic, payload } => serde_json::json!({
+            "kind": "send_a2a", "peer": peer, "topic": topic, "payload": payload,
         }),
         Action::LocalLlm { prompt } => serde_json::json!({
             "kind": "local_llm", "prompt": prompt,
