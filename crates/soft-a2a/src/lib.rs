@@ -1,15 +1,30 @@
 //! A2A protocol surface for soft agents.
 //!
-//! Uses `lex-api` as a library to register A2A routes alongside lex-native
-//! routes. Pins one A2A version; the wire-format adapter is isolated in a
-//! single module so future migrations stay contained.
+//! Pins one A2A version (see [`A2A_VERSION`]). Server side wraps
+//! `tiny_http` and bridges incoming messages into a
+//! [`soft_agent::MailboxSender`]; client side wraps `ureq` for
+//! peer-to-peer sends. Cross-process A2A across processes works today;
+//! Phase 1 of soft only requires in-process and uses the
+//! `soft_agent::Mailbox` directly without going through this crate.
 //!
-//! Scope: see `docs/crates/soft-a2a.md` in the repo root.
+//! See `docs/crates/soft-a2a.md` in the repo root for scope.
 //!
 //! # Status
 //!
-//! Skeleton. Depends on `soft-agent` (sibling crate) and on lex-lang
-//! [#184](https://github.com/alpibrusl/lex-lang/issues/184) (`[a2a]` effect tag)
-//! and [#187](https://github.com/alpibrusl/lex-lang/issues/187) (trace integration).
+//! v0 — minimal Message + Part + AgentCard schema, POST `/a2a/messages`
+//! and GET `/a2a/agent-card` endpoints, an HTTP client. Task lifecycle,
+//! SSE streaming, signatures, and authentication are deferred.
 
 #![forbid(unsafe_code)]
+
+pub mod client;
+pub mod error;
+pub mod server;
+pub mod wire;
+
+pub use client::A2aClient;
+pub use error::Error;
+pub use server::A2aServer;
+pub use wire::{
+    AgentCard, Capabilities, Message, MessageMetadata, Part, Role, Skill, A2A_VERSION,
+};

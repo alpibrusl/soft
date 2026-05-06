@@ -6,13 +6,19 @@ license.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "A2A protocol surface for soft agents. Pins one A2A version; uses lex-api as a library."
+description = "A2A protocol surface for soft agents. Pins one A2A version; uses tiny_http for the server side and ureq for the client."
 publish = false
 
 [dependencies]
-# lex-lang v0.2.0 — uses lex-api as a library; soft-agent for shared types.
-lex-api    = { workspace = true }
+# soft-agent provides the Mailbox the A2A server forwards into and the
+# message types we bridge from the wire.
 soft-agent = { path = "../soft-agent" }
 
+# A2A wire layer: serde for the schema, tiny_http for the server, ureq
+# for the client.
 serde      = { workspace = true }
 serde_json = { workspace = true }
+tiny_http  = { workspace = true }
+ureq       = { workspace = true }
+
+[dev-dependencies]
