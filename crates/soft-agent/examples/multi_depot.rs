@@ -1,6 +1,6 @@
-//! Multi-agent depot demo: vehicle + depot + tms in three Runners,
-//! linked by an `InProcessRouter`. Exercises both Phase 1 specs
-//! (`grid_budget` on depot, `soc_reserve` on vehicle) end-to-end.
+//! Multi-agent depot demo, all three agents authored entirely in Lex
+//! (config + handlers). Soft-agent's DSL preamble ([`soft_agent::DSL_PREAMBLE`])
+//! is auto-prepended by [`Runner::from_lex_source`].
 //!
 //! Three rounds with different initial state:
 //!   A. Vehicle has plenty of SoC → accepts dispatch directly.
@@ -14,8 +14,7 @@ use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
 use serde_json::{json, Value};
 use soft_agent::{
-    A2aMessage, Action, AgentConfig, Effect, Gate, InProcessRouter, LexHost,
-    Mailbox, MailboxSender, Runner,
+    A2aMessage, Action, Gate, InProcessRouter, Mailbox, MailboxSender, Runner,
 };
 use tempfile::tempdir;
 
@@ -56,9 +55,16 @@ spec soc_reserve {
 "#;
 
 const VEHICLE_LEX: &str = r#"
-type ActionRecord = {
-  kind :: Str, server :: Str, tool :: Str, args_json :: Str,
-  peer :: Str, a2a_topic :: Str, payload_json :: Str, prompt :: Str,
+fn config() -> AgentConfig {
+  agent_new("vehicle")
+  |> agent_peers(["depot", "tms"])
+  |> agent_effects(["a2a"])
+  |> agent_specs(["specs/soc_reserve.spec"])
+  |> agent_handles([
+       { topic: "Dispatch",     fn_name: "on_dispatch" },
+       { topic: "GrantSession", fn_name: "on_grant" },
+       { topic: "DenySession",  fn_name: "on_deny" },
+     ])
 }
 
 fn enough_soc(soc :: Float, energy :: Float, reserve :: Float) -> Bool {
@@ -73,15 +79,13 @@ fn on_dispatch(
     [{
       kind: "send_a2a", server: "", tool: "", args_json: "",
       peer: msg.from, a2a_topic: "Acknowledge",
-      payload_json: "{\"delivery_id\":\"d-1\"}",
-      prompt: "",
+      payload_json: "{\"delivery_id\":\"d-1\"}", prompt: "",
     }]
   } else {
     [{
       kind: "send_a2a", server: "", tool: "", args_json: "",
       peer: "depot", a2a_topic: "RequestSession",
-      payload_json: "{\"vehicle_id\":\"v-1\",\"power_kw\":50}",
-      prompt: "",
+      payload_json: "{\"vehicle_id\":\"v-1\",\"power_kw\":50}", prompt: "",
     }]
   }
 }
@@ -93,8 +97,7 @@ fn on_grant(
   [{
     kind: "send_a2a", server: "", tool: "", args_json: "",
     peer: "tms", a2a_topic: "Complete",
-    payload_json: "{\"delivery_id\":\"d-1\"}",
-    prompt: "",
+    payload_json: "{\"delivery_id\":\"d-1\"}", prompt: "",
   }]
 }
 
@@ -105,16 +108,20 @@ fn on_deny(
   [{
     kind: "send_a2a", server: "", tool: "", args_json: "",
     peer: "tms", a2a_topic: "Failed",
-    payload_json: "{\"reason\":\"depot_denied\"}",
-    prompt: "",
+    payload_json: "{\"reason\":\"depot_denied\"}", prompt: "",
   }]
 }
 "#;
 
 const DEPOT_LEX: &str = r#"
-type ActionRecord = {
-  kind :: Str, server :: Str, tool :: Str, args_json :: Str,
-  peer :: Str, a2a_topic :: Str, payload_json :: Str, prompt :: Str,
+fn config() -> AgentConfig {
+  agent_new("depot")
+  |> agent_peers(["vehicle"])
+  |> agent_effects(["a2a"])
+  |> agent_specs(["specs/grid_budget.spec"])
+  |> agent_handles([
+       { topic: "RequestSession", fn_name: "on_request_session" },
+     ])
 }
 
 fn within(current :: Float, delta :: Float, grid :: Float, pv :: Float) -> Bool {
@@ -129,25 +136,28 @@ fn on_request_session(
     [{
       kind: "send_a2a", server: "", tool: "", args_json: "",
       peer: msg.from, a2a_topic: "GrantSession",
-      payload_json: "{\"charger_id\":\"c-1\"}",
-      prompt: "",
+      payload_json: "{\"charger_id\":\"c-1\"}", prompt: "",
     }]
   } else {
     [{
       kind: "send_a2a", server: "", tool: "", args_json: "",
       peer: msg.from, a2a_topic: "DenySession",
-      payload_json: "{\"reason\":\"grid_budget\"}",
-      prompt: "",
+      payload_json: "{\"reason\":\"grid_budget\"}", prompt: "",
     }]
   }
 }
 "#;
 
-// TMS just terminates: any incoming message → no further action.
 const TMS_LEX: &str = r#"
-type ActionRecord = {
-  kind :: Str, server :: Str, tool :: Str, args_json :: Str,
-  peer :: Str, a2a_topic :: Str, payload_json :: Str, prompt :: Str,
+fn config() -> AgentConfig {
+  agent_new("tms")
+  |> agent_peers(["vehicle"])
+  |> agent_effects(["a2a"])
+  |> agent_handles([
+       { topic: "Acknowledge", fn_name: "terminate" },
+       { topic: "Complete",    fn_name: "terminate" },
+       { topic: "Failed",      fn_name: "terminate" },
+     ])
 }
 
 fn terminate(
@@ -161,8 +171,8 @@ fn terminate(
 #[derive(Clone)]
 struct Scenario {
     label: &'static str,
-    vehicle_state: serde_json::Value,
-    depot_state: serde_json::Value,
+    vehicle_state: Value,
+    depot_state: Value,
 }
 
 fn fnum(state: &Value, key: &str, default: f64) -> f64 {
@@ -172,8 +182,6 @@ fn fnum(state: &Value, key: &str, default: f64) -> f64 {
 fn vehicle_bindings_fn() -> soft_agent::BindingsFn {
     Box::new(|state, action| {
         let mut m = IndexMap::new();
-        // Only "Acknowledge" actually consumes energy in this model. Asking
-        // for a charging session does not.
         let used = if let Action::SendA2a { topic, .. } = action {
             if topic == "Acknowledge" {
                 fnum(state, "energy_needed", 0.0)
@@ -193,7 +201,6 @@ fn vehicle_bindings_fn() -> soft_agent::BindingsFn {
 fn depot_bindings_fn() -> soft_agent::BindingsFn {
     Box::new(|state, action| {
         let mut m = IndexMap::new();
-        // Only an outbound "GrantSession" implies a future grid load delta.
         let delta = if let Action::SendA2a { topic, .. } = action {
             if topic == "GrantSession" {
                 fnum(state, "requested_kw", 0.0)
@@ -213,76 +220,42 @@ fn depot_bindings_fn() -> soft_agent::BindingsFn {
 
 fn build_runners(
     router: &InProcessRouter,
-    vehicle_state: serde_json::Value,
-    depot_state: serde_json::Value,
-) -> std::io::Result<(Runner, Runner, Runner, MailboxSender)> {
-    let vehicle_host = LexHost::from_source(VEHICLE_LEX).expect("vehicle lex compiles");
-    let depot_host = LexHost::from_source(DEPOT_LEX).expect("depot lex compiles");
-    let tms_host = LexHost::from_source(TMS_LEX).expect("tms lex compiles");
-    let soc_gate = Gate::from_sources(&[SOC_RESERVE_SPEC], HOST).expect("soc gate compiles");
-    let grid_gate = Gate::from_sources(&[GRID_BUDGET_SPEC], HOST).expect("grid gate compiles");
+    vehicle_state: Value,
+    depot_state: Value,
+) -> Result<(Runner, Runner, Runner, MailboxSender), Box<dyn std::error::Error>> {
+    let soc_gate = Gate::from_sources(&[SOC_RESERVE_SPEC], HOST)?;
+    let grid_gate = Gate::from_sources(&[GRID_BUDGET_SPEC], HOST)?;
 
     // Vehicle.
-    let vehicle_agent = AgentConfig::new("vehicle")
-        .peers(["depot", "tms"])
-        .effects([Effect::A2a])
-        .build()
-        .unwrap();
     let (v_box, v_send) = Mailbox::new();
     router.register("vehicle", v_send.clone());
-    let vehicle = Runner::builder()
-        .agent(vehicle_agent)
-        .state(vehicle_state)
+    let vehicle = Runner::from_lex_source(VEHICLE_LEX)?
         .mailbox(v_box)
-        .lex_host(vehicle_host)
+        .state(vehicle_state)
         .gate(soc_gate)
         .bindings_fn(vehicle_bindings_fn())
-        .handle_lex("Dispatch", "on_dispatch")
-        .handle_lex("GrantSession", "on_grant")
-        .handle_lex("DenySession", "on_deny")
         .executor(Box::new(router.executor("vehicle")))
-        .build()
-        .unwrap();
+        .build()?;
 
     // Depot.
-    let depot_agent = AgentConfig::new("depot")
-        .peers(["vehicle"])
-        .effects([Effect::A2a])
-        .build()
-        .unwrap();
     let (d_box, d_send) = Mailbox::new();
     router.register("depot", d_send);
-    let depot = Runner::builder()
-        .agent(depot_agent)
-        .state(depot_state)
+    let depot = Runner::from_lex_source(DEPOT_LEX)?
         .mailbox(d_box)
-        .lex_host(depot_host)
+        .state(depot_state)
         .gate(grid_gate)
         .bindings_fn(depot_bindings_fn())
-        .handle_lex("RequestSession", "on_request_session")
         .executor(Box::new(router.executor("depot")))
-        .build()
-        .unwrap();
+        .build()?;
 
     // TMS.
-    let tms_agent = AgentConfig::new("tms")
-        .peers(["vehicle"])
-        .effects([Effect::A2a])
-        .build()
-        .unwrap();
     let (t_box, t_send) = Mailbox::new();
     router.register("tms", t_send);
-    let tms = Runner::builder()
-        .agent(tms_agent)
-        .state(json!({"running": true}))
+    let tms = Runner::from_lex_source(TMS_LEX)?
         .mailbox(t_box)
-        .lex_host(tms_host)
-        .handle_lex("Acknowledge", "terminate")
-        .handle_lex("Complete", "terminate")
-        .handle_lex("Failed", "terminate")
+        .state(json!({"running": true}))
         .executor(Box::new(router.executor("tms")))
-        .build()
-        .unwrap();
+        .build()?;
 
     Ok((vehicle, depot, tms, v_send))
 }
@@ -293,7 +266,7 @@ fn drain_until_quiescent(
     depot: &mut Runner,
     tms: &mut Runner,
 ) {
-    let mut totals = [(0usize, 0usize); 3]; // (allowed, denied) for v, d, t
+    let mut totals = [(0usize, 0usize); 3];
     for round in 0..20 {
         let v = vehicle.drain().unwrap();
         let d = depot.drain().unwrap();
@@ -322,9 +295,9 @@ fn run_scenario(scenario: &Scenario, store: &lex_store::Store) -> Vec<lex_trace:
     println!("\n=== Scenario {} ===", scenario.label);
     let router = InProcessRouter::new();
     let (mut vehicle, mut depot, mut tms, vehicle_seed) =
-        build_runners(&router, scenario.vehicle_state.clone(), scenario.depot_state.clone()).unwrap();
+        build_runners(&router, scenario.vehicle_state.clone(), scenario.depot_state.clone())
+            .unwrap();
 
-    // Seed: TMS dispatches a delivery to vehicle.
     vehicle_seed
         .send(A2aMessage {
             from: "tms".into(),
@@ -342,7 +315,10 @@ fn run_scenario(scenario: &Scenario, store: &lex_store::Store) -> Vec<lex_trace:
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== multi-agent depot demo (vehicle + depot + tms over InProcessRouter) ===");
+    println!(
+        "=== multi-agent depot demo ({} authored entirely in Lex via DSL) ===",
+        "vehicle + depot + tms"
+    );
 
     let dir = tempdir()?;
     let store = lex_store::Store::open(dir.path())?;
@@ -371,7 +347,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         all_runs.extend(runs);
     }
 
-    // Roll up via the same scan_trace the soft-replay binary uses.
     println!("\n=== replay rollup ===");
     let mut totals = soft_agent::replay::Counts::default();
     for run in &all_runs {
@@ -385,7 +360,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         totals.inconclusive, totals.executed, totals.skipped,
     );
     if totals.has_violation() {
-        println!("\nVIOLATION: executed > allowed across {} traces", all_runs.len());
         return Err("replay invariant violated".into());
     }
     println!("\n{} traces; no spec was bypassed.", all_runs.len());
