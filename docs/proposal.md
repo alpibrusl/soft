@@ -87,20 +87,27 @@ Each Python service exposes an MCP server. Tools are registered in Lex's existin
 
 A2A is for agent-to-agent; MCP is for tools. Forcing one to do both either bloats the agent protocol with tool semantics or strips MCP of its discovery and schema affordances. Keeping them separate gives interop on day one with both ecosystems.
 
-## 5. Lex extensions required
+## 5. Where each piece lives
 
-**No grammar changes.** The ≤500-token grammar constraint stays intact. Each extension below maps to a draft issue in §11.
+**No grammar changes.** The ≤500-token grammar constraint stays intact. Work splits across two repos: `lex-lang` adds language-level primitives; `soft` owns the agent runtime and the A2A surface. See [`docs/lex-lang/scope-decision.md`](./lex-lang/scope-decision.md) for the upstream team's reasoning on the boundary.
 
-| # | Item | Shape | Existing infra it builds on |
+### 5.1 Upstream (`lex-lang`)
+
+| Issue | Item | Shape | Existing infra it builds on |
 |---|---|---|---|
-| 1 | `lex-agent` crate | New crate. Agent type, mailbox, peer config, handler dispatch. | `std.flow` for the receive→propose→gate→execute loop. |
-| 2 | New effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]` | Runtime handlers in `lex-runtime`. | Existing effect-typing pipeline. No type-system change. |
-| 3 | MCP server wrapper | Registers MCP servers as Tool Registry entries with effect manifests. | Existing Tool Registry, ACLI compliance. |
-| 4 | A2A endpoints | New surface on existing transport. | `lex-api` HTTP/JSON server. |
-| 5 | Spec-checker as runtime action gate | New wiring: proposed effect → spec check against state → allow/deny. | `spec-checker` (random property + SMT-LIB export). |
-| 6 | `lex-trace` ↔ `lex-vcs` integration | Open question — see §10. | `lex-trace`, `lex-store`, `lex-vcs store-merge`. |
+| [#184](https://github.com/alpibrusl/lex-lang/issues/184) | Effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]` | Runtime handlers in `lex-runtime`. | Existing effect-typing pipeline. No type-system change. |
+| [#185](https://github.com/alpibrusl/lex-lang/issues/185) | MCP server wrapper for Tool Registry | Registers MCP servers as Tool Registry entries with effect manifests. | Existing Tool Registry, ACLI compliance. |
+| [#186](https://github.com/alpibrusl/lex-lang/issues/186) | `spec-checker` as runtime action gate | New wiring: proposed effect → spec check against state → allow/deny. | `spec-checker` (random property + SMT-LIB export). |
+| [#187](https://github.com/alpibrusl/lex-lang/issues/187) | `lex-trace` ↔ `lex-vcs` integration | Open question — see §10. | `lex-trace`, `lex-store`, `lex-vcs store-merge`. |
 
-The cumulative net-new code is one crate plus four runtime handlers plus wiring — not a new framework.
+### 5.2 In-repo (`soft`)
+
+| Crate | Role | Depends on |
+|---|---|---|
+| [`soft-agent`](./crates/soft-agent.md) | Agent runtime: identity, mailbox, handler dispatch, action-gate hook. | `lex-{vcs,types,trace}`, #184–#187. |
+| [`soft-a2a`](./crates/soft-a2a.md) | A2A wire surface; pins A2A version; uses `lex-api` as a library. | `lex-api`, `soft-agent`, #184. |
+
+The cumulative net-new code is two soft-internal crates plus four lex-lang runtime handlers plus wiring — not a new framework.
 
 ## 6. Edge deployment
 
@@ -199,7 +206,7 @@ These need resolution before or during Phase 1.
 
 ### 10.1 lex-trace ↔ lex-vcs integration
 
-Is `lex-trace`'s output already a first-class entity inside `lex-vcs` branches, or is integration the "tier-2" work the original draft referenced as upstream-pending? Affects whether edge audit sync is "free" or requires upstream work. Issue 6 in §11 asks this.
+Is `lex-trace`'s output already a first-class entity inside `lex-vcs` branches, or is integration the "tier-2" work the original draft referenced as upstream-pending? Affects whether edge audit sync is "free" or requires upstream work. [#187](https://github.com/alpibrusl/lex-lang/issues/187) asks this.
 
 ### 10.2 LLM-internal vs LLM-external
 
@@ -211,128 +218,42 @@ A2A is emerging-standard. Breaking changes are a real risk. **Mitigation:** pin 
 
 ### 10.4 Spec-checker ergonomics as a runtime gate
 
-`spec-checker` today is built around randomized property checking and SMT-LIB export. That is fine for tests; it may not be the right ergonomics for a per-action runtime gate that must return a verdict in milliseconds. Worth a spike before committing the wiring shape. Issue 5 in §11 covers this.
+`spec-checker` today is built around randomized property checking and SMT-LIB export. That is fine for tests; it may not be the right ergonomics for a per-action runtime gate that must return a verdict in milliseconds. Worth a spike before committing the wiring shape. [#186](https://github.com/alpibrusl/lex-lang/issues/186) covers this.
 
 ### 10.5 Edge LLM determinism
 
 `[llm-local]` replay requires seeded sampling and a pinned model snapshot. Replay only reproduces decisions if both are stable across runs. **Mitigation:** include the model snapshot hash and sampling seed in each trace record. This is part of what `lex-trace` should capture.
 
-## 11. Draft issue bodies for `alpibrusl/lex-lang`
+## 11. Issue and crate index
 
-The GitHub MCP scope of the session that produced this proposal is restricted to `alpibrusl/soft`, so these issues need to be filed by hand in `lex-lang`. Each is written so that it stands on its own.
+Four issues filed in `lex-lang`; two declined and now soft-internal crates. Detailed bodies live in their own files for traceability.
 
----
+### 11.1 lex-lang issues
 
-### Issue 1 — New crate `lex-agent` for autonomous agent runtime
+| # | File mirror | Title |
+|---|---|---|
+| [#184](https://github.com/alpibrusl/lex-lang/issues/184) | [`docs/lex-lang/issues/184-effect-tags.md`](./lex-lang/issues/184-effect-tags.md) | Add effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]` |
+| [#185](https://github.com/alpibrusl/lex-lang/issues/185) | [`docs/lex-lang/issues/185-mcp-tool-registry-wrapper.md`](./lex-lang/issues/185-mcp-tool-registry-wrapper.md) | MCP server wrapper for Tool Registry |
+| [#186](https://github.com/alpibrusl/lex-lang/issues/186) | [`docs/lex-lang/issues/186-spec-checker-runtime-gate.md`](./lex-lang/issues/186-spec-checker-runtime-gate.md) | Wire `spec-checker` as a runtime action gate |
+| [#187](https://github.com/alpibrusl/lex-lang/issues/187) | [`docs/lex-lang/issues/187-lex-trace-vcs-integration.md`](./lex-lang/issues/187-lex-trace-vcs-integration.md) | Clarify `lex-trace` ↔ `lex-vcs` integration |
 
-**Summary.** Add a new crate `lex-agent` that provides the runtime primitives for autonomous agents in Lex. Driven by the `soft` proposal in `alpibrusl/soft:docs/proposal.md`.
+### 11.2 Soft-internal crates
 
-**Scope.**
+| Crate | Scoping doc | Origin |
+|---|---|---|
+| `soft-agent` | [`docs/crates/soft-agent.md`](./crates/soft-agent.md) | Originally drafted as upstream Issue 1; declined — agent runtime is above the language. |
+| `soft-a2a` | [`docs/crates/soft-a2a.md`](./crates/soft-a2a.md) | Originally drafted as upstream Issue 4; declined — A2A version pin belongs with the consumer. |
 
-- An `agent` type carrying: identity (content-addressed), state, declared peer list, declared MCP tool allowlist, declared effect set, system prompt and goal (for LLM-driven agents).
-- A mailbox abstraction over A2A messages (in-process for Phase 1; transport-pluggable).
-- Handler dispatch built on `std.flow`: receive → propose → gate → execute.
-- Action-gate hook between "LLM proposed action" and "effect executes" that calls into `spec-checker` and writes to `lex-trace`.
-
-**Out of scope.**
-
-- A2A wire transport (separate issue, Issue 4).
-- MCP wire transport (Issue 3).
-- Effect handlers themselves (Issue 2).
-
-**Acceptance.** Phase 1 of `soft` can run a three-agent demo (`vehicle`, `depot`, `tms`) in-process using `lex-agent`.
-
----
-
-### Issue 2 — Add effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]`
-
-**Summary.** Add four new runtime effects to `lex-runtime` so agent effect signatures can express what they may do.
-
-**Why these four are distinct.**
-
-- `[a2a]` and `[mcp]` are different protocols with different security and replay properties.
-- `[llm-local]` and `[llm-cloud]` are different deployment surfaces with different latency, cost, and determinism properties. An edge `vehicle-agent` typed `[llm-local, telemetry-read, a2a-out]` must not be able to accidentally call a cloud LLM.
-
-**Scope.** Effect tags, runtime handlers, policy-gate integration, `--allow-effects` plumbing.
-
-**Acceptance.** A Lex program that declares `[llm-local]` cannot reach `[llm-cloud]` and vice versa. Each effect is loggable to `lex-trace` with enough information to replay.
-
----
-
-### Issue 3 — MCP server wrapper for Tool Registry
-
-**Summary.** Allow MCP servers to be registered as Tool Registry entries with effect manifests, so a Lex program can call MCP tools through the existing tool-registry surface.
-
-**Scope.**
-
-- A wrapper that consumes an MCP server's tool list and produces Tool Registry entries.
-- Effect manifest derivation: each MCP tool is annotated with an effect (e.g. `[mcp(ocpp), net]`).
-- Wire-format glue.
-
-**Open questions.**
-
-- How much of this is already covered by ACLI compliance? May reduce scope.
-- Authentication and credentials handling at the MCP boundary.
-
-**Acceptance.** A Python service exposed as an MCP server can be called from a Lex agent via the Tool Registry, and the call is correctly typed and audited.
-
----
-
-### Issue 4 — A2A endpoints exposed via `lex-api`
-
-**Summary.** Expose A2A agent endpoints via the existing `lex-api` HTTP/JSON server. Agents become A2A-discoverable services with agent cards.
-
-**Scope.**
-
-- A2A protocol adapter: Messages, Tasks, Parts, agent cards, identity.
-- Pin a specific A2A version. Isolate the adapter in one module so a future upgrade is contained.
-- Streaming via SSE where A2A specifies it.
-
-**Out of scope.**
-
-- Cross-process A2A is acceptable target for this issue, but Phase 1 of `soft` only requires in-process.
-
-**Acceptance.** A `lex-agent` instance is reachable as an A2A endpoint, returns a valid agent card, and round-trips a Message with a structured Part.
-
----
-
-### Issue 5 — Wire `spec-checker` as a runtime action gate
-
-**Summary.** Reuse `spec-checker` as a runtime invariant gate that runs between an agent's proposed action and its execution.
-
-**Scope.**
-
-- An API: `gate(state, proposed_effect, specs) -> Allow | Deny(reason)`.
-- Performance target: per-action verdict in single-digit milliseconds for Phase 1's spec set.
-- Trace integration: every gate decision is recorded to `lex-trace`.
-
-**Open questions.**
-
-- `spec-checker` today is randomized-property + SMT-LIB. Is the existing implementation suitable for synchronous per-action gating, or is a different evaluation mode needed? Possibly the gate uses a deterministic sub-mode and the SMT path is reserved for offline verification.
-- Spec authoring ergonomics. Library-first, no grammar change. The constraint that grammar fits in ≤500 tokens is intact.
-
-**Acceptance.** Phase 1's two safety specs (site grid budget, SoC reserve) can be expressed and gate proposed effects in the demo.
-
----
-
-### Issue 6 — Clarify `lex-trace` and `lex-vcs` integration
-
-**Summary.** Question issue. Document and (if needed) implement the integration between `lex-trace` and `lex-vcs` so that an edge agent's local trace can be merged into a cloud audit log via `store-merge` on reconnect.
-
-**Specifics.**
-
-- Is each trace currently a `lex-vcs` branch, or is it a separate artifact in `lex-store`?
-- If separate, what is the recommended path to land the integration the original soft draft (`lex-lang:docs/proposals/soft.md`) referenced as "tier-2"?
-- Does `store-merge` already handle three-way merge of trace data, or does that need a custom resolver?
-
-**Acceptance.** A clear answer documented, plus any required implementation work scoped as a follow-up issue.
-
----
+See [`docs/lex-lang/scope-decision.md`](./lex-lang/scope-decision.md) for the upstream team's reasoning.
 
 ## 12. Path forward
 
-1. File the six issues above against `alpibrusl/lex-lang`.
-2. Build Phase 1 in this repo, importing `lex-agent` (as it lands) and the new effect handlers.
+**Lex-lang issues filed.** [#184](https://github.com/alpibrusl/lex-lang/issues/184), [#185](https://github.com/alpibrusl/lex-lang/issues/185), [#186](https://github.com/alpibrusl/lex-lang/issues/186), [#187](https://github.com/alpibrusl/lex-lang/issues/187) are tracked upstream.
+
+**Next steps.**
+
+1. Stand up `crates/soft-agent` and `crates/soft-a2a` in this repo as the assembly layer; track upstream landings to wire each lex-lang primitive in as it ships.
+2. Build Phase 1 in `examples/phase1/` against the real APIs as they land.
 3. Validate the headline deliverable (audit replay across cloud + edge proves no spec violation).
 4. Use what we learn to scope Phase 2 honestly.
 

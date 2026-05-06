@@ -1,10 +1,7 @@
-# Issue 2 — Add effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]`
+# Issue #184 — Add effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]`
 
-> **Filing instructions**
-> - **Repository:** `alpibrusl/lex-lang`
-> - **Title:** `` Add effect tags `[a2a]`, `[mcp]`, `[llm-local]`, `[llm-cloud]` ``
-> - **Suggested labels:** `effects`, `runtime`
-> - **Source:** `alpibrusl/soft:docs/proposal.md`
+> **Status:** Filed as [`alpibrusl/lex-lang#184`](https://github.com/alpibrusl/lex-lang/issues/184).
+> Source: `alpibrusl/soft:docs/proposal.md`. Suggested labels: `effects`, `runtime`.
 
 ---
 
@@ -26,8 +23,9 @@ Add four new runtime effects to `lex-runtime` so agent effect signatures can exp
 
 ## Out of scope
 
-- The actual A2A and MCP wire formats (Issues 3 and 4).
-- The `lex-agent` crate that consumes these effects (Issue 1).
+- The actual A2A wire format — lives downstream in soft, see [`docs/crates/soft-a2a.md`](../../crates/soft-a2a.md).
+- The actual MCP wire format — see #185.
+- The agent runtime that consumes these effects — lives in soft, see [`docs/crates/soft-agent.md`](../../crates/soft-agent.md).
 
 ## Acceptance
 
@@ -37,7 +35,7 @@ Add four new runtime effects to `lex-runtime` so agent effect signatures can exp
 
 ## Related
 
-- Issue 1: `lex-agent` crate (consumer)
-- Issue 3: MCP wrapper (uses `[mcp]`)
-- Issue 4: A2A endpoints (uses `[a2a]`)
-- Issue 6: trace integration depends on each effect being loggable
+- [`docs/crates/soft-agent.md`](../../crates/soft-agent.md) — consumer
+- #185 — MCP wrapper (uses `[mcp]`)
+- [`docs/crates/soft-a2a.md`](../../crates/soft-a2a.md) — A2A wrapper (uses `[a2a]`)
+- #187 — trace integration depends on each effect being loggable

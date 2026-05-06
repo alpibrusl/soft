@@ -1,10 +1,7 @@
-# Issue 3 — MCP server wrapper for Tool Registry
+# Issue #185 — MCP server wrapper for Tool Registry
 
-> **Filing instructions**
-> - **Repository:** `alpibrusl/lex-lang`
-> - **Title:** `MCP server wrapper for Tool Registry`
-> - **Suggested labels:** `tool-registry`, `mcp`
-> - **Source:** `alpibrusl/soft:docs/proposal.md`
+> **Status:** Filed as [`alpibrusl/lex-lang#185`](https://github.com/alpibrusl/lex-lang/issues/185).
+> Source: `alpibrusl/soft:docs/proposal.md`. Suggested labels: `tool-registry`, `mcp`.
 
 ---
 
@@ -37,5 +34,5 @@ Allow MCP servers to be registered as Tool Registry entries with effect manifest
 
 ## Related
 
-- Issue 1: `lex-agent` crate (consumer)
-- Issue 2: `[mcp]` effect tag (prerequisite)
+- [`docs/crates/soft-agent.md`](../../crates/soft-agent.md) — consumer
+- #184 — `[mcp]` effect tag (prerequisite)

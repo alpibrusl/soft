@@ -1,10 +1,7 @@
-# Issue 5 — Wire `spec-checker` as a runtime action gate
+# Issue #186 — Wire `spec-checker` as a runtime action gate
 
-> **Filing instructions**
-> - **Repository:** `alpibrusl/lex-lang`
-> - **Title:** `` Wire `spec-checker` as a runtime action gate ``
-> - **Suggested labels:** `spec-checker`, `runtime`
-> - **Source:** `alpibrusl/soft:docs/proposal.md`
+> **Status:** Filed as [`alpibrusl/lex-lang#186`](https://github.com/alpibrusl/lex-lang/issues/186).
+> Source: `alpibrusl/soft:docs/proposal.md`. Suggested labels: `spec-checker`, `runtime`.
 
 ---
 
@@ -22,7 +19,7 @@ Reuse `spec-checker` as a runtime invariant gate that runs between an agent's pr
 ## Open questions
 
 - `spec-checker` today is built around randomized property checking and SMT-LIB export. Is the existing implementation suitable for synchronous per-action gating, or is a different evaluation mode needed? Possibly the runtime gate uses a deterministic sub-mode, with the SMT-LIB path reserved for offline verification.
-- Spec authoring ergonomics. The two Phase 1 specs (see `alpibrusl/soft:examples/phase1/specs/`) are simple `forall state, action: P(state, action)` predicates. If existing `spec-checker` syntax is heavier than that, a thin sugar layer may help.
+- Spec authoring ergonomics. The two Phase 1 specs (see [`alpibrusl/soft:examples/phase1/specs/`](../../../examples/phase1/specs/)) are simple `forall state, action: P(state, action)` predicates. If existing `spec-checker` syntax is heavier than that, a thin sugar layer may help.
 
 ## Acceptance
 
@@ -33,5 +30,5 @@ Reuse `spec-checker` as a runtime invariant gate that runs between an agent's pr
 
 ## Related
 
-- Issue 1: `lex-agent` crate (calls `gate` from the action-gate hook)
-- Issue 6: `lex-trace` integration (consumes gate decisions)
+- [`docs/crates/soft-agent.md`](../../crates/soft-agent.md) — calls `gate` from the action-gate hook
+- #187 — `lex-trace` integration (consumes gate decisions)
