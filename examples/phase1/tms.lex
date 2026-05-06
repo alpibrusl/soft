@@ -1,8 +1,12 @@
 # tms-agent — runs in the cloud.
 #
-# Dispatches deliveries to vehicles and tracks their lifecycle. Only agent
-# carrying mcp(tms_db) for delivery records and mcp(optimizer) for routing.
-# Cannot grant charging sessions; cannot speak OCPP.
+# Compile-time effect signature [llm_cloud, mcp, a2a, time] enforces:
+#   - cannot reach a local LLM (no llm_local)
+#
+# Runtime guarantees enforced by soft-agent's tool registry:
+#   - MCP allowlist is { optimizer, tms_db } only
+#   - cannot speak OCPP (ocpp not in allowlist)
+#   - cannot grant charging sessions (Topic.GrantSession not registered)
 
 # requires: messages.lex
 
@@ -34,8 +38,8 @@ fn config() -> agent.Config {
     |> agent.system_prompt(
         "You are the transport management system. Assign pending deliveries " ++
         "to suitable vehicles and track lifecycle to completion.")
-    |> agent.tools([tools.optimizer, tools.tms_db])
-    |> agent.effects([llm_cloud, mcp, a2a_in, a2a_out, time])
+    |> agent.mcp_servers(["optimizer", "tms_db"])
+    |> agent.effects([llm_cloud, mcp, a2a, time])
     |> agent.handle(Topic.Acknowledge, on_ack)
     |> agent.handle(Topic.Complete,    on_complete)
     |> agent.tick(60.seconds, on_tick)        # periodic dispatch loop

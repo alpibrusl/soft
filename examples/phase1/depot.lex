@@ -1,9 +1,18 @@
 # depot-agent — runs in the cloud (one per site).
 #
-# Owns the site's grid budget. Only agent in the system with mcp(ocpp) and
-# the authority to emit Topic.GrantSession. The grid_budget spec is a
-# runtime gate on every emitted mcp(ocpp) action — a RemoteStartTransaction
-# whose projected site load would exceed the budget is denied before the
+# Compile-time effect signature [llm_cloud, mcp, a2a] enforces:
+#   - cannot reach a local LLM (no llm_local)
+#
+# Runtime guarantees enforced by soft-agent's tool registry:
+#   - MCP allowlist is { ocpp, optimizer } only
+#   - depot is the only agent in the system whose allowlist contains "ocpp"
+#     and the only agent that registers Topic.GrantSession as outgoing,
+#     so RemoteStartTransaction calls and grant-session messages can only
+#     originate from depot-agent.
+#
+# The grid_budget spec is a runtime gate on every proposed mcp action — a
+# RemoteStartTransaction whose projected site load would exceed the budget
+# returns Deny (or Inconclusive, treated as Deny in soft-agent) before the
 # OCPP call goes out.
 
 # requires: messages.lex
@@ -30,11 +39,11 @@ fn config() -> agent.Config {
     |> agent.system_prompt(
         "You manage a charging depot. Grant sessions when feasible; deny " ++
         "with a clear reason and retry-after when not. Stay under grid budget.")
-    |> agent.tools([tools.optimizer, tools.ocpp])
+    |> agent.mcp_servers(["optimizer", "ocpp"])
     |> agent.specs([specs.grid_budget])
-    |> agent.effects([llm_cloud, mcp, a2a_in, a2a_out])
+    |> agent.effects([llm_cloud, mcp, a2a])
     |> agent.handle(Topic.RequestSession, on_request)
-    |> agent.handle(Topic.StatusReport,    on_status)
+    |> agent.handle(Topic.StatusReport,   on_status)
 }
 
 fn on_request(
@@ -46,14 +55,14 @@ fn on_request(
     Err(e)  => Err(e),
     Ok(req) => {
       # The LLM proposes a plan informed by the optimizer. Typical proposals:
-      #   - mcp.call("optimizer", "schedule", { req, site_state: s })
-      #   - mcp.call("ocpp", "RemoteStartTransaction", { charger, vehicle })
-      #   - a2a.send(from, Topic.GrantSession, SessionGrant({ ... }))
+      #   - agent.call_mcp("optimizer", "schedule_session", { req, site_state: s })
+      #   - agent.call_mcp("ocpp",      "remote_start_transaction", { ... })
+      #   - agent.send_a2a(from, "GrantSession", SessionGrant({ ... }))
       # OR
-      #   - a2a.send(from, Topic.DenySession, SessionDenial({ ... }))
+      #   - agent.send_a2a(from, "DenySession",  SessionDenial({ ... }))
       #
       # Each emitted action passes through specs.grid_budget before
-      # execution. The OCPP RemoteStartTransaction action is the one the
+      # execution. The OCPP remote_start_transaction action is the one the
       # spec actually constrains; the A2A reply is informational.
       let proposal = llm.propose(s, "session request", { req: req, site: s })
       Ok((s, proposal.actions))

@@ -1,13 +1,16 @@
 # vehicle-agent — runs on truck edge hardware (Jetson Orin / Mac Studio mini).
 #
-# Effect signature is the load-bearing line. By construction this agent
-# cannot:
-#   - reach a cloud LLM (no llm_cloud)
-#   - call OCPP or any other cloud MCP server (no mcp)
-#   - grant a charging session (no Topic.GrantSession in handle())
-#   - dispatch deliveries (no Topic.Dispatch in handle())
+# Compile-time effect signature [llm_local, mcp, a2a] enforces:
+#   - cannot reach a cloud LLM (no llm_cloud)
 #
-# Read the effect set as the agent's authority.
+# Runtime guarantees enforced by soft-agent's tool registry:
+#   - MCP allowlist is { telemetry, local_planner } only
+#   - cannot grant a charging session (no Topic.GrantSession in outgoing)
+#   - cannot dispatch deliveries (no Topic.Dispatch in outgoing)
+#
+# The agent.handle pattern lives in soft-agent (this repo). The primitives
+# the handlers ultimately call — agent.local_complete, agent.send_a2a,
+# agent.call_mcp — are lex-lang v0.2.0 std.agent builtins.
 
 # requires: messages.lex
 
@@ -27,9 +30,9 @@ fn config() -> agent.Config {
     |> agent.system_prompt(
         "You are an autonomous truck. Accept feasible deliveries, request " ++
         "charging when SoC nears reserve, report status on heartbeat.")
-    |> agent.tools([tools.telemetry_read, tools.local_planner])
+    |> agent.mcp_servers(["telemetry", "local_planner"])
     |> agent.specs([specs.soc_reserve])
-    |> agent.effects([llm_local, telemetry_read, a2a_in, a2a_out])
+    |> agent.effects([llm_local, mcp, a2a])
     |> agent.handle(Topic.Dispatch,     on_dispatch)
     |> agent.handle(Topic.GrantSession, on_grant)
     |> agent.handle(Topic.DenySession,  on_deny)
@@ -39,14 +42,15 @@ fn on_dispatch(
   s :: VehicleState,
   msg :: A2AMessage,
   from :: peer.Ref,
-) -> [llm_local, telemetry_read, emit] Result[(VehicleState, List[Action]), Error] {
+) -> [llm_local, mcp, emit] Result[(VehicleState, List[Action]), Error] {
   match a2a.parse_part(msg, "delivery") :: Result[DispatchOrder, _] {
     Err(e)    => Err(e),
     Ok(order) => {
       # The LLM decides whether to accept and whether to ask for charging.
       # The runtime gate (specs.soc_reserve) checks each emitted action
-      # before it executes; an Acknowledge whose projected SoC drops below
-      # reserve will be denied and the LLM is asked to re-propose.
+      # before it executes. An Acknowledge whose projected SoC drops below
+      # reserve gets a Deny verdict (or Inconclusive, treated as Deny by
+      # default in soft-agent). The variant + reason are recorded to trace.
       let proposal = llm.propose(s, "incoming dispatch", order)
       Ok((s |> with_pending(order), proposal.actions))
     },

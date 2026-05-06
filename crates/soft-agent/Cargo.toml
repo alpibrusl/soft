@@ -10,14 +10,12 @@ description = "Autonomous agent runtime for the soft project. Sits on lex-lang p
 publish = false
 
 [dependencies]
-# Awaiting lex-lang issues:
-# - #184 effect tags                 — https://github.com/alpibrusl/lex-lang/issues/184
-# - #185 MCP wrapper                 — https://github.com/alpibrusl/lex-lang/issues/185
-# - #186 spec-checker runtime gate   — https://github.com/alpibrusl/lex-lang/issues/186
-# - #187 lex-trace ↔ lex-vcs         — https://github.com/alpibrusl/lex-lang/issues/187
-#
-# Once landed:
-# lex-types   = { workspace = true }
-# lex-runtime = { workspace = true }
-# lex-trace   = { workspace = true }
-# lex-vcs     = { workspace = true }
+# lex-lang v0.2.0 — primitives we build on.
+lex-bytecode = { workspace = true }   # Vm, Tracer, Value (spec bindings)
+lex-runtime  = { workspace = true }   # capability policy, effect handler
+lex-store    = { workspace = true }   # Store::save_trace
+lex-trace    = { workspace = true }   # Recorder, RunId
+spec-checker = { workspace = true }   # evaluate_gate, GateVerdict
+
+indexmap   = { workspace = true }
+serde_json = { workspace = true }

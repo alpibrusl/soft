@@ -1,30 +1,33 @@
 # Issue #187 — Clarify `lex-trace` ↔ `lex-vcs` integration
 
-> **Status:** Filed as [`alpibrusl/lex-lang#187`](https://github.com/alpibrusl/lex-lang/issues/187).
-> Source: `alpibrusl/soft:docs/proposal.md`. Suggested labels: `lex-trace`, `lex-vcs`, `question`.
+> **Status:** Closed by [PR #192](https://github.com/alpibrusl/lex-lang/pull/192) in lex-lang v0.2.0 (2026-05-06). Documentation only — no code change to `lex-trace` or `lex-vcs`.
+>
+> **Answers:**
+>
+> - **Traces are NOT `lex-vcs` branches.** They live at `<store>/traces/<run_id>/trace.json` as standalone artifacts.
+> - **Run IDs are content-addressed**, so cross-store sync is **union semantics** — no three-way merge needed.
+> - **Edge ↔ cloud sync** is "blob copy + attestation entry" — no new resolver, no changes to `lex-vcs`.
+> - Hardening multi-edge with agent-identity-seeded `RunId::new(seed)` is a [follow-up](https://github.com/alpibrusl/lex-lang/issues/198) (not blocking Phase 1).
 
 ---
 
-## Summary
+## Soft-side implications
 
-Question issue. Document and (if needed) implement the integration between `lex-trace` and `lex-vcs` so that an edge agent's local trace can be merged into a cloud audit log via `store-merge` on reconnect.
+The original soft proposal assumed three-way merge of trace branches via `lex-vcs store-merge`. The shipped answer is simpler — see `docs/proposal.md` §3.3, §6.4, §6.5 for the corrected description.
 
-This is the substrate the soft Phase 1 demo's headline deliverable depends on: *replay the simulated day's trace from cloud + edge audit logs and prove no spec was ever violated.*
+## Writer-side API soft will use
 
-## Specifics to clarify
+```rust
+let recorder = lex_trace::Recorder::new();
+let run_id   = lex_trace::RunId::new(seed);   // seed: agent_instance_id + intent_hash
+let vm       = lex_runtime::Vm::with_tracer(&recorder);
 
-- Is each trace currently a `lex-vcs` branch, or is it a separate artifact in `lex-store`?
-- If separate, what is the recommended path to land the integration the original soft draft (`alpibrusl/lex-lang:docs/proposals/soft.md` on the `claude/review-agent-vcs-architecture-9EZ74` branch) referenced as **tier-2**?
-- Does `store-merge` already handle three-way merge of trace data, or does that need a custom resolver? Trace records are append-only per process, which should make the resolver case simple, but it should be confirmed.
-- How should the truck (edge) and cloud agree on identity for a trace branch? Content-addressed agent identity (handled in [`docs/crates/soft-agent.md`](../../crates/soft-agent.md)) may be the natural anchor.
+// ... vm runs the agent's Lex code; recorder accumulates a TraceTree ...
 
-## Acceptance
+let tree = recorder.into_tree();
+lex_store::Store::save_trace(&tree)?;          // writes <store>/traces/<run_id>/trace.json
+```
 
-- A clear answer documented in `lex-lang/docs/`.
-- If implementation work is required, it is scoped as a follow-up issue (or issues) blocking the soft Phase 1 audit-replay deliverable.
+## Consumer
 
-## Related
-
-- [`docs/crates/soft-agent.md`](../../crates/soft-agent.md) — produces the trace
-- #184 — effect tags (each effect is a trace record)
-- #186 — spec-checker as runtime gate (gate decisions are trace records)
+- [`docs/crates/soft-agent.md`](../../crates/soft-agent.md) — runs the VM with the recorder attached; persists per-run traces.

@@ -10,11 +10,9 @@ description = "A2A protocol surface for soft agents. Pins one A2A version; uses 
 publish = false
 
 [dependencies]
-# soft-agent = { path = "../soft-agent" }   # uncomment when soft-agent has a public API
-#
-# Awaiting lex-lang:
-# - #184 the [a2a] effect tag
-# - #187 lex-trace integration for inbound/outbound message audit
-#
-# Once lex-api is depended on:
-# lex-api = { workspace = true }
+# lex-lang v0.2.0 — uses lex-api as a library; soft-agent for shared types.
+lex-api    = { workspace = true }
+soft-agent = { path = "../soft-agent" }
+
+serde      = { workspace = true }
+serde_json = { workspace = true }
