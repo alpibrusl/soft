@@ -1,5 +1,7 @@
 # Soft → lex-lang: build report after v0.2.0
 
+> **Snapshot at v0.2.0.** See [`v0.2.2-followup.md`](./v0.2.2-followup.md) for the current state — three of the four follow-ups in §4 closed in v0.2.1/v0.2.2, the parser papercut in §3.2 also shipped, and soft has grown a multi-process runner, agent DSL, tick mechanism, stateful Lex handlers, and a real LLM-driven example since this was written.
+
 **Date:** 2026-05-06 (later in the day; v0.2.0 published this morning).
 **Re:** post-build follow-up to [`expectations.md`](./expectations.md).
 

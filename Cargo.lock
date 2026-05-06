@@ -789,9 +789,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "lex-ast"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c7b719ad9eb50d25baff7d4f4ff35932b3ccb0912692002ee8b074eddbdba51"
+checksum = "193746218e17591b7359ce811be4db29d69e4628ffa8317daa79a14abd992b32"
 dependencies = [
  "indexmap",
  "lex-syntax",
@@ -803,9 +803,9 @@ dependencies = [
 
 [[package]]
 name = "lex-bytecode"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2961c2f75080062d81e064c5b60c0d1bf419e9d515f2cb460f3218c41b19f505"
+checksum = "ef81d65b95ae08737250ce5bbba5e1c6fead37a021db61407e273a5c6fb0da40"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -817,9 +817,9 @@ dependencies = [
 
 [[package]]
 name = "lex-runtime"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdc69e5a7d64564bee73cf0ac39543c5e1fa310434ddf3b69a5be78c62965fc9"
+checksum = "4cad8704631006fc2e83d776b9b0656a5c5618fe434906f806826acda2b80400"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -850,9 +850,9 @@ dependencies = [
 
 [[package]]
 name = "lex-store"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f8e33ccf2c8bdf70252c62a2dd0a25131e40c846b81e04f922c499c9c31d5f3"
+checksum = "c3a0499d38613734a61b17f2e3b1990a70781727a79120388d8faff3f47e5e54"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -867,9 +867,9 @@ dependencies = [
 
 [[package]]
 name = "lex-syntax"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e6be00c4671fc69531530b28aff745374dad1a1216aa8af57c31235137a89eb"
+checksum = "2651d1ca239b464f85933ee7064196b941507471ec12bbb83dd8894ecd8d7062"
 dependencies = [
  "indexmap",
  "logos",
@@ -881,9 +881,9 @@ dependencies = [
 
 [[package]]
 name = "lex-trace"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c6f4867cd96a6b65aef20ec6849529670318bb6ff9f5fd5f57780a5161f95a1"
+checksum = "862df7cfeeab3fe253288c607d340accb6ff03ee8d872c64caa85a0b23a9f621"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -896,9 +896,9 @@ dependencies = [
 
 [[package]]
 name = "lex-types"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41797c7811790d9448e1f0b45dcf412ef3c00fdf6de1b776cffee8a5a29d4071"
+checksum = "c46a7d43f3fd95109f46dececd9b380a9cf9296421a2486b160f4d2672978775"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -909,9 +909,9 @@ dependencies = [
 
 [[package]]
 name = "lex-vcs"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d0e00b1c235b4329e9bf2b3528b75e648904bda55d59d43420ca03190845bd"
+checksum = "3fc06235df03c69f4ca4dda25d8cb4d0dd56aac29d2dee32395b9637709080d0"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -1632,9 +1632,9 @@ dependencies = [
 
 [[package]]
 name = "spec-checker"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f34f31bb976a31852fd3e0bdab5dd5bc2a13a5b7cd548fd832269572c6f5d9c"
+checksum = "4e2a5b9444e5ad3b939a0efb7ef42ae3ccd19764b615b45a6d8a3f14dfc28950"
 dependencies = [
  "indexmap",
  "lex-ast",

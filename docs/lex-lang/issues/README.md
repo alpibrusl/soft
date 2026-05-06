@@ -11,27 +11,26 @@ Issues we've filed (or drafted) against [`alpibrusl/lex-lang`](https://github.co
 | [#186](https://github.com/alpibrusl/lex-lang/issues/186) | [186-spec-checker-runtime-gate.md](./186-spec-checker-runtime-gate.md) | Wire `spec-checker` as a runtime action gate |
 | [#187](https://github.com/alpibrusl/lex-lang/issues/187) | [187-lex-trace-vcs-integration.md](./187-lex-trace-vcs-integration.md) | Clarify `lex-trace` ↔ `lex-vcs` integration |
 
-## Open follow-ups (filed by lex-lang in response to our expectations doc)
+## Closed by lex-lang in v0.2.2 (2026-05-06)
 
-| GitHub | Title |
-|---|---|
-| [#196](https://github.com/alpibrusl/lex-lang/issues/196) | LLM provider configuration |
-| [#197](https://github.com/alpibrusl/lex-lang/issues/197) | `agent.call_mcp` connection cache |
-| [#198](https://github.com/alpibrusl/lex-lang/issues/198) | Edge runtime cross-compile + verified aarch64 binaries |
-
-## Drafts (to file)
-
-Drafts surfaced while building soft-agent v0–v3 and soft-a2a v0. Bodies in [`drafts/`](./drafts/); paste each into a new issue at `https://github.com/alpibrusl/lex-lang/issues/new`. Once filed, rename the file to `<number>-<topic>.md` and move it out of `drafts/` next to the others.
-
-| File | Title (proposed) | Priority |
+| GitHub | Closing PR | Title |
 |---|---|---|
-| [drafts/parser-underscore-handling.md](./drafts/parser-underscore-handling.md) | Parser: allow `_name` and `let _` for unused-binding ergonomics | Low — papercuts only, current workarounds work. |
+| [#196](https://github.com/alpibrusl/lex-lang/issues/196) | [#203](https://github.com/alpibrusl/lex-lang/pull/203) | LLM provider configuration — env-var shape we sketched (`OLLAMA_HOST`, `LEX_LLM_LOCAL_MODEL`, `LEX_LLM_CLOUD_BASE_URL`, `LEX_LLM_CLOUD_API_KEY`) plus an `EffectHandler` escape hatch. `agent.local_complete` and `agent.cloud_complete` now make real HTTP calls. |
+| [#197](https://github.com/alpibrusl/lex-lang/issues/197) | [#203](https://github.com/alpibrusl/lex-lang/pull/203) | `agent.call_mcp` connection cache — `McpClientCache` (LRU, default cap 16) keyed by command-line, owned by `DefaultHandler`. |
+| [#198](https://github.com/alpibrusl/lex-lang/issues/198) (docs half) | [#204](https://github.com/alpibrusl/lex-lang/pull/204) | Edge runtime cross-compile recipes — `aarch64-unknown-linux-{gnu,musl}` and `aarch64-darwin`, pre-built binaries on every `v*` release. The hardware-verification half stays on soft. |
+| (drafted) #200 | [#205](https://github.com/alpibrusl/lex-lang/pull/205) | Parser: `_name` identifiers + `let _` discard. Drafted by us in `drafts/parser-underscore-handling.md`; lex-lang adopted and shipped. |
 
 ## Resolved before filing
 
 | Topic | Resolution |
 |---|---|
 | [drafts/spec-checker-tracer-hook.md](./drafts/spec-checker-tracer-hook.md) | Shipped in lex-lang v0.2.1 as `spec_checker::evaluate_gate_compiled_traced` + `impl Tracer for lex_trace::Handle`. Wired through `soft_agent::Gate::evaluate_traced` and the runner's per-action gate path. |
+| [drafts/parser-underscore-handling.md](./drafts/parser-underscore-handling.md) | Shipped in lex-lang v0.2.2 as PR #205 — `_name` and `let _` both work. We can simplify our DSL preamble + agent .lex files to use `_state`/`_msg` for unused params. |
+
+## Open soft-side work (none blocking)
+
+- Verify lex-lang's pre-built aarch64 binaries on real Jetson + Mac Studio mini hardware (the verification half of #198).
+- An LLM-driven example agent now that `agent.local_complete`/`cloud_complete` are wired upstream.
 
 ## Two original drafts not filed upstream
 
