@@ -9,14 +9,17 @@ use soft_agent::Mailbox;
 use std::time::Duration;
 
 fn fresh_card() -> AgentCard {
-    AgentCard::new("test-agent", "soft-a2a round-trip test", "http://127.0.0.1:0/")
+    AgentCard::new(
+        "test-agent",
+        "soft-a2a round-trip test",
+        "http://127.0.0.1:0/",
+    )
 }
 
 #[test]
 fn server_forwards_message_to_mailbox() {
     let (mailbox, sender) = Mailbox::new();
-    let server = A2aServer::bind("127.0.0.1:0", fresh_card(), sender)
-        .expect("server binds");
+    let server = A2aServer::bind("127.0.0.1:0", fresh_card(), sender).expect("server binds");
     let addr = server.local_addr().expect("has addr");
     let _handle = server.spawn();
 
@@ -40,9 +43,7 @@ fn server_forwards_message_to_mailbox() {
         .send(&format!("http://{addr}"), &msg)
         .expect("client send ok");
 
-    let received = mailbox
-        .recv()
-        .expect("message lands in mailbox");
+    let received = mailbox.recv().expect("message lands in mailbox");
     assert_eq!(received.from, "tester");
     assert_eq!(received.topic, "RequestSession");
     assert_eq!(received.payload["vehicle_id"], "v-1");
@@ -65,7 +66,7 @@ fn missing_metadata_returns_400() {
         metadata: None,
     };
     let result = A2aClient::new().send(&format!("http://{addr}"), &bad);
-    let err = result.err().expect("should be 400");
+    let err = result.expect_err("should be 400");
     let msg = err.to_string();
     assert!(msg.contains("400"), "expected 400, got {msg:?}");
 }
@@ -97,8 +98,12 @@ fn text_parts_are_concatenated_into_payload() {
         message_id: "msg-text".into(),
         role: Role::User,
         parts: vec![
-            Part::Text { text: "hello".into() },
-            Part::Text { text: "world".into() },
+            Part::Text {
+                text: "hello".into(),
+            },
+            Part::Text {
+                text: "world".into(),
+            },
         ],
         task_id: None,
         metadata: Some(MessageMetadata {

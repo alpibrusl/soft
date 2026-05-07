@@ -46,10 +46,7 @@ fn budget_bindings(current: f64, delta: f64, grid: f64, pv: f64) -> IndexMap<Str
     m
 }
 
-fn run_traced(
-    gate: &Gate,
-    bindings: &IndexMap<String, Value>,
-) -> (Verdict, lex_trace::TraceTree) {
+fn run_traced(gate: &Gate, bindings: &IndexMap<String, Value>) -> (Verdict, lex_trace::TraceTree) {
     let recorder = lex_trace::Recorder::new();
     let handle = recorder.handle();
     let h_for_closure = handle.clone();

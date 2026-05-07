@@ -3,9 +3,7 @@
 //! through `handle_lex`.
 
 use serde_json::json;
-use soft_agent::{
-    A2aMessage, AgentConfig, Effect, Mailbox, Runner,
-};
+use soft_agent::{A2aMessage, Effect, Mailbox, Runner};
 
 const VEHICLE_LEX: &str = r#"
 fn config() -> AgentConfig {
@@ -85,7 +83,10 @@ fn lex_dsl_runner_dispatches_to_lex_handler() {
 
     let report = runner.drain().unwrap();
     assert_eq!(report.messages, 1);
-    assert_eq!(report.total_allowed, 1, "on_dispatch's SendA2a should execute");
+    assert_eq!(
+        report.total_allowed, 1,
+        "on_dispatch's SendA2a should execute"
+    );
 }
 
 #[test]
@@ -96,7 +97,9 @@ fn config() -> AgentConfig {
   |> agent_effects(["llm_local", "made_up_effect"])
 }
 "#;
-    let err = Runner::from_lex_source(bad_src).err().expect("should fail fast");
+    let err = Runner::from_lex_source(bad_src)
+        .err()
+        .expect("should fail fast");
     let msg = err.to_string();
     assert!(msg.contains("made_up_effect"), "got: {msg}");
 }

@@ -3,9 +3,7 @@
 //! mailbox. Two Lex handlers, two `Runner`s, one router.
 
 use serde_json::json;
-use soft_agent::{
-    A2aMessage, AgentConfig, Effect, InProcessRouter, LexHost, Mailbox, Runner,
-};
+use soft_agent::{A2aMessage, AgentConfig, Effect, InProcessRouter, LexHost, Mailbox, Runner};
 
 /// Vehicle has two handlers:
 /// - `on_dispatch`: TMS sends a Dispatch → vehicle requests charging from depot.
@@ -136,13 +134,19 @@ fn router_delivers_send_a2a_between_two_agents() {
     // InProcessExecutor delivers into depot's mailbox.
     let r1 = vehicle_runner.drain().expect("vehicle drain ok");
     assert_eq!(r1.messages, 1);
-    assert_eq!(r1.total_allowed, 1, "vehicle's SendA2a to depot should execute");
+    assert_eq!(
+        r1.total_allowed, 1,
+        "vehicle's SendA2a to depot should execute"
+    );
 
     // Depot drains → handler proposes SendA2a("vehicle", "GrantSession") →
     // executor delivers back into vehicle's mailbox.
     let r2 = depot_runner.drain().expect("depot drain ok");
     assert_eq!(r2.messages, 1, "depot should have received RequestSession");
-    assert_eq!(r2.total_allowed, 1, "depot's SendA2a to vehicle should execute");
+    assert_eq!(
+        r2.total_allowed, 1,
+        "depot's SendA2a to vehicle should execute"
+    );
 
     // Vehicle drains again → handler is on_grant, returns [] → no further send.
     let r3 = vehicle_runner.drain().expect("vehicle second drain ok");

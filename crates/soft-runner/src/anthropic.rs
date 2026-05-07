@@ -55,8 +55,8 @@ impl AnthropicCloudHandler {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(1024);
-        let api_version = std::env::var("ANTHROPIC_VERSION")
-            .unwrap_or_else(|_| "2023-06-01".into());
+        let api_version =
+            std::env::var("ANTHROPIC_VERSION").unwrap_or_else(|_| "2023-06-01".into());
 
         let agent = ureq::AgentBuilder::new()
             .timeout(ANTHROPIC_HTTP_TIMEOUT)

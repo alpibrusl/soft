@@ -71,7 +71,11 @@ pub struct InProcessExecutor {
 impl ActionExecutor for InProcessExecutor {
     fn execute(&mut self, action: &Action) -> Result<Value, ExecError> {
         match action {
-            Action::SendA2a { peer, topic, payload } => {
+            Action::SendA2a {
+                peer,
+                topic,
+                payload,
+            } => {
                 let senders = self.senders.lock().unwrap();
                 let sender = senders.get(peer).ok_or_else(|| {
                     ExecError::NotPermitted(format!("router has no peer `{peer}`"))

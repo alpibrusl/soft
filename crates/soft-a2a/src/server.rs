@@ -33,11 +33,7 @@ pub struct A2aServer {
 
 impl A2aServer {
     /// Bind a server to `addr` (e.g. `"127.0.0.1:0"` for an ephemeral port).
-    pub fn bind(
-        addr: &str,
-        agent_card: AgentCard,
-        sender: MailboxSender,
-    ) -> Result<Self, Error> {
+    pub fn bind(addr: &str, agent_card: AgentCard, sender: MailboxSender) -> Result<Self, Error> {
         let server = Server::http(addr).map_err(|e| Error::Bind(e.to_string()))?;
         Ok(A2aServer {
             server,
@@ -119,11 +115,7 @@ fn handle(
     }
 }
 
-fn handle_shutdown(
-    req: Request,
-    shutdown: Option<&Arc<AtomicBool>>,
-    expected_token: Option<&str>,
-) {
+fn handle_shutdown(req: Request, shutdown: Option<&Arc<AtomicBool>>, expected_token: Option<&str>) {
     let flag = match shutdown {
         Some(f) => f,
         None => {

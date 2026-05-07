@@ -35,7 +35,7 @@ fn tick_fires_periodically_and_runs_handler() {
     let report = runner.drain().unwrap();
     let n = *counter.lock().unwrap();
     assert!(
-        n >= 4 && n <= 8,
+        (4..=8).contains(&n),
         "expected 4..=8 ticks in ~120ms with 20ms interval, got {n}"
     );
     assert_eq!(report.messages, n);
@@ -70,5 +70,8 @@ fn tick_handler_can_emit_actions() {
     std::thread::sleep(Duration::from_millis(60));
     let report = runner.drain().unwrap();
     assert!(report.messages >= 1);
-    assert_eq!(report.total_allowed, report.messages, "every tick emits one allowed action");
+    assert_eq!(
+        report.total_allowed, report.messages,
+        "every tick emits one allowed action"
+    );
 }

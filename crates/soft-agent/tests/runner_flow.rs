@@ -2,9 +2,7 @@
 //! executor → trace, persisted to a temp lex_store::Store.
 
 use serde_json::json;
-use soft_agent::{
-    A2aMessage, Action, AgentConfig, Effect, Mailbox, MockExecutor, Runner,
-};
+use soft_agent::{A2aMessage, Action, AgentConfig, Effect, Mailbox, MockExecutor, Runner};
 use tempfile::tempdir;
 
 fn build_test_agent(name: &str) -> soft_agent::Agent {
@@ -104,7 +102,10 @@ fn runner_denies_unknown_mcp_server() {
     let report = runner.drain().expect("drain ok");
     assert_eq!(report.messages, 1);
     assert_eq!(report.total_allowed, 0);
-    assert_eq!(report.total_denied, 1, "ocpp should be blocked by allowlist");
+    assert_eq!(
+        report.total_denied, 1,
+        "ocpp should be blocked by allowlist"
+    );
 }
 
 #[test]

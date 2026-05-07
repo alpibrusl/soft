@@ -66,8 +66,8 @@ impl LexHost {
     /// default `EffectHandler` (lex-runtime's `DefaultHandler` with
     /// `Policy::permissive`).
     pub fn from_source(src: &str) -> Result<Self, Error> {
-        let prog = lex_syntax::parse_source(src)
-            .map_err(|e| Error::Spec(format!("parse: {e:?}")))?;
+        let prog =
+            lex_syntax::parse_source(src).map_err(|e| Error::Spec(format!("parse: {e:?}")))?;
         let stages = lex_ast::canonicalize_program(&prog);
         if let Err(errs) = lex_types::check_program(&stages) {
             return Err(Error::Spec(format!("typecheck: {errs:?}")));
@@ -121,7 +121,10 @@ impl LexHost {
             ended,
         );
 
-        Ok(LexCall { value: result, tree })
+        Ok(LexCall {
+            value: result,
+            tree,
+        })
     }
 
     pub fn program(&self) -> &Program {

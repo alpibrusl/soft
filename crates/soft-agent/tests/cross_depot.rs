@@ -208,7 +208,8 @@ fn vehicle_falls_over_from_depot1_to_depot2() {
     // The vehicle's state advanced past `tried = 1` after depot1 denied,
     // proving the stateful Lex handler ran twice (Dispatch + Deny).
     assert_eq!(
-        vehicle.state()["tried"], 2,
+        vehicle.state()["tried"],
+        2,
         "vehicle should have escalated to depot2"
     );
 }

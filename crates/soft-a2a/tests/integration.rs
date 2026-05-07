@@ -8,9 +8,7 @@
 //! here but available, lex-trace) cooperate with both soft crates.
 
 use serde_json::json;
-use soft_a2a::{
-    A2aClient, A2aServer, AgentCard, Message, MessageMetadata, Part, Role,
-};
+use soft_a2a::{A2aClient, A2aServer, AgentCard, Message, MessageMetadata, Part, Role};
 use soft_agent::{AgentConfig, Effect, LexHost, Mailbox, Runner};
 use std::time::Duration;
 use tempfile::tempdir;

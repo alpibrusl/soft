@@ -43,7 +43,11 @@ impl A2aRoutedExecutor {
 impl ActionExecutor for A2aRoutedExecutor {
     fn execute(&mut self, action: &Action) -> Result<Value, ExecError> {
         match action {
-            Action::SendA2a { peer, topic, payload } => {
+            Action::SendA2a {
+                peer,
+                topic,
+                payload,
+            } => {
                 let url = self.peers.get(peer).ok_or_else(|| {
                     ExecError::NotPermitted(format!("no URL configured for peer `{peer}`"))
                 })?;
@@ -59,9 +63,9 @@ impl ActionExecutor for A2aRoutedExecutor {
                         topic: topic.clone(),
                     }),
                 };
-                self.client.send(url, &message).map_err(|e| {
-                    ExecError::Failed(format!("a2a send to `{peer}` ({url}): {e}"))
-                })?;
+                self.client
+                    .send(url, &message)
+                    .map_err(|e| ExecError::Failed(format!("a2a send to `{peer}` ({url}): {e}")))?;
                 Ok(json!({"delivered_to": peer, "topic": topic, "url": url}))
             }
             Action::CallMcp { server, tool, .. } => {

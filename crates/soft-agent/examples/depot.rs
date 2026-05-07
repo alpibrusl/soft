@@ -103,7 +103,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mailbox(mailbox)
         .gate(gate)
         .bindings_fn(Box::new(|state, action| {
-            let current_kw = state.get("active_kw").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let current_kw = state
+                .get("active_kw")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
             let grid_kw = state
                 .get("grid_budget_kw")
                 .and_then(|v| v.as_f64())

@@ -44,7 +44,11 @@ fn lex_handler_returning_state_updates_runner_state() {
     }
     let report = runner.drain().unwrap();
     assert_eq!(report.messages, 3);
-    assert_eq!(runner.state()["count"], 3, "state should advance with each tick");
+    assert_eq!(
+        runner.state()["count"],
+        3,
+        "state should advance with each tick"
+    );
 }
 
 const STATELESS_LEX: &str = r#"

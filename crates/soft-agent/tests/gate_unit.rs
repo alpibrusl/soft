@@ -63,8 +63,7 @@ fn gate_evaluates_predicate() {
 
 #[test]
 fn gate_first_failing_spec_wins() {
-    let gate = Gate::from_sources(&[ALWAYS_ALLOW, ALWAYS_DENY], HOST)
-        .expect("gate must build");
+    let gate = Gate::from_sources(&[ALWAYS_ALLOW, ALWAYS_DENY], HOST).expect("gate must build");
     let mut bindings = IndexMap::new();
     bindings.insert("x".to_string(), Value::Int(0));
     let v = gate.evaluate(&bindings);

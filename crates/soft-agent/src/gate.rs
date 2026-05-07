@@ -7,9 +7,7 @@
 
 use indexmap::IndexMap;
 use lex_bytecode::Value;
-use spec_checker::{
-    evaluate_gate_compiled, evaluate_gate_compiled_traced, parse_spec, Spec,
-};
+use spec_checker::{evaluate_gate_compiled, evaluate_gate_compiled_traced, parse_spec, Spec};
 
 use crate::{Action, Error};
 
@@ -74,11 +72,7 @@ impl Gate {
     ///
     /// Available since `spec-checker` 0.2.1 (closes the soft-side
     /// tracer-hook ask).
-    pub fn evaluate_traced<F>(
-        &self,
-        bindings: &IndexMap<String, Value>,
-        new_tracer: F,
-    ) -> Verdict
+    pub fn evaluate_traced<F>(&self, bindings: &IndexMap<String, Value>, new_tracer: F) -> Verdict
     where
         F: Fn() -> Box<dyn lex_bytecode::vm::Tracer>,
     {
@@ -96,7 +90,11 @@ pub(crate) fn action_to_json(action: &Action) -> serde_json::Value {
         Action::CallMcp { server, tool, args } => serde_json::json!({
             "kind": "call_mcp", "server": server, "tool": tool, "args": args,
         }),
-        Action::SendA2a { peer, topic, payload } => serde_json::json!({
+        Action::SendA2a {
+            peer,
+            topic,
+            payload,
+        } => serde_json::json!({
             "kind": "send_a2a", "peer": peer, "topic": topic, "payload": payload,
         }),
         Action::LocalLlm { prompt } => serde_json::json!({

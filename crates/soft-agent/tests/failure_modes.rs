@@ -9,8 +9,7 @@ use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
 use serde_json::{json, Value};
 use soft_agent::{
-    A2aMessage, Action, ActionExecutor, AgentConfig, Effect, ExecError, Gate, Mailbox,
-    Runner,
+    A2aMessage, Action, ActionExecutor, AgentConfig, Effect, ExecError, Gate, Mailbox, Runner,
 };
 use tempfile::tempdir;
 
@@ -72,10 +71,13 @@ fn charger_drop_mid_session_does_not_violate_invariant() {
                 v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0)
             }
             let mut m = IndexMap::new();
-            m.insert("current_kw".into(), LexValue::Float(fnum(state, "current_kw")));
-            m.insert("delta_kw".into(),   LexValue::Float(fnum(state, "delta_kw")));
-            m.insert("grid_kw".into(),    LexValue::Float(fnum(state, "budget_kw")));
-            m.insert("pv_kw".into(),      LexValue::Float(fnum(state, "pv_kw")));
+            m.insert(
+                "current_kw".into(),
+                LexValue::Float(fnum(state, "current_kw")),
+            );
+            m.insert("delta_kw".into(), LexValue::Float(fnum(state, "delta_kw")));
+            m.insert("grid_kw".into(), LexValue::Float(fnum(state, "budget_kw")));
+            m.insert("pv_kw".into(), LexValue::Float(fnum(state, "pv_kw")));
             m
         }))
         .executor(Box::new(FlakyMcpExecutor {
@@ -172,11 +174,15 @@ fn offline_reconnect_blob_copy_preserves_trace() {
     let cloud_store = lex_store::Store::open(cloud_dir.path()).unwrap();
 
     let edge_tree = edge_store.load_trace(&run_id.0).expect("edge trace loads");
-    let copied = cloud_store.save_trace(&edge_tree).expect("cloud receives trace");
+    let copied = cloud_store
+        .save_trace(&edge_tree)
+        .expect("cloud receives trace");
     assert_eq!(copied, run_id.0);
 
     // Cloud now has the same trace.
-    let cloud_tree = cloud_store.load_trace(&run_id.0).expect("cloud trace loads");
+    let cloud_tree = cloud_store
+        .load_trace(&run_id.0)
+        .expect("cloud trace loads");
     assert_eq!(cloud_tree, edge_tree, "trees must match byte-for-byte");
 
     // Run IDs are content-addressed; if the same agent runs again with

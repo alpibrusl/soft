@@ -27,6 +27,4 @@ pub use client::A2aClient;
 pub use error::Error;
 pub use executor::A2aRoutedExecutor;
 pub use server::A2aServer;
-pub use wire::{
-    AgentCard, Capabilities, Message, MessageMetadata, Part, Role, Skill, A2A_VERSION,
-};
+pub use wire::{AgentCard, Capabilities, Message, MessageMetadata, Part, Role, Skill, A2A_VERSION};

@@ -4,16 +4,14 @@
 //! Pipeline per inbound message:
 //!
 //! 1. Trace `a2a.received`.
-//! 2. Dispatch to the topic handler (Rust closure or Lex function);
-//!    collect proposed actions.
-//! 3. For each action:
-//!    a. Trace `action.proposed`.
-//!    b. If a gate is configured, evaluate; trace `gate.verdict`.
-//!       Inconclusive is treated as Deny by default.
-//!    c. If the action is `CallMcp`, check `Agent::allows_mcp_server`
-//!       (per-server runtime allowlist; lex 0.2 ships flat `[mcp]`).
-//!    d. Execute via the configured [`ActionExecutor`]; trace
-//!       `action.executed`.
+//! 2. Dispatch to the topic handler (Rust closure or Lex function); collect
+//!    proposed actions.
+//! 3. For each action: trace `action.proposed`; if a gate is configured,
+//!    evaluate it and trace `gate.verdict` (Inconclusive is treated as Deny
+//!    by default); if the action is `CallMcp`, check
+//!    `Agent::allows_mcp_server` (per-server runtime allowlist; lex 0.2 ships
+//!    flat `[mcp]`); execute via the configured [`ActionExecutor`]; trace
+//!    `action.executed`.
 //!
 //! Trace records are flushed at [`Runner::finalize`].
 
@@ -25,11 +23,11 @@ use lex_bytecode::Value as LexValue;
 use serde_json::{json, Value};
 
 use crate::{
-    Action, A2aMessage, Agent, Error, Mailbox, MailboxSender,
     executor::{ActionExecutor, MockExecutor},
     gate::{action_to_json, Gate, Verdict},
     lex_host::LexHost,
     trace::TraceWriter,
+    A2aMessage, Action, Agent, Error, Mailbox, MailboxSender,
 };
 
 fn now_ms() -> u64 {
@@ -56,11 +54,14 @@ fn bindings_to_json(b: &IndexMap<String, LexValue>) -> Value {
 /// fail to bind any quantifier and (typically) return Inconclusive.
 pub type BindingsFn = Box<dyn Fn(&Value, &Action) -> IndexMap<String, LexValue> + Send>;
 
+/// Native Rust topic handler. See [`Handler::Rust`].
+pub type RustHandlerFn = Box<dyn FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send>;
+
 /// One topic handler. Either a Rust closure or the name of a Lex function
 /// that the runner will invoke via its [`LexHost`].
 pub enum Handler {
     /// Native Rust closure. Mutates state directly; returns proposed actions.
-    Rust(Box<dyn FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send>),
+    Rust(RustHandlerFn),
     /// Name of a Lex function compiled into the runner's `LexHost`.
     /// The function is called with `(state, msg)` arguments and must
     /// return a list of action records (see [`Action::from_json`] for
@@ -161,8 +162,7 @@ impl Runner {
                     let h_for_closure = spec_handle.clone();
                     let spec_started = now_ms();
                     let verdict = gate.evaluate_traced(&bindings, move || {
-                        Box::new(h_for_closure.clone())
-                            as Box<dyn lex_bytecode::vm::Tracer>
+                        Box::new(h_for_closure.clone()) as Box<dyn lex_bytecode::vm::Tracer>
                     });
                     let spec_ended = now_ms();
                     let spec_tree = spec_handle.finalize(
@@ -205,7 +205,8 @@ impl Runner {
 
             // Execute
             let outcome = self.executor.execute(action).map_err(|e| e.to_string());
-            self.trace.record_effect("action.executed", summary, outcome);
+            self.trace
+                .record_effect("action.executed", summary, outcome);
             allowed += 1;
         }
 
@@ -227,7 +228,11 @@ impl Runner {
                 }
             }
         }
-        Ok(DrainReport { messages, total_allowed, total_denied })
+        Ok(DrainReport {
+            messages,
+            total_allowed,
+            total_denied,
+        })
     }
 
     /// Persist the trace to `store` and return the run ID.
@@ -389,11 +394,7 @@ impl RunnerBuilder {
     /// must exist in the runner's [`LexHost`] (configured via
     /// [`Self::lex_host`]) and have the signature
     /// `fn(state, msg) -> List[ActionRecord]`.
-    pub fn handle_lex(
-        mut self,
-        topic: impl Into<String>,
-        fn_name: impl Into<String>,
-    ) -> Self {
+    pub fn handle_lex(mut self, topic: impl Into<String>, fn_name: impl Into<String>) -> Self {
         self.handlers
             .insert(topic.into(), Handler::Lex(fn_name.into()));
         self
@@ -459,7 +460,9 @@ impl RunnerBuilder {
             ));
         }
 
-        let executor = self.executor.unwrap_or_else(|| Box::new(MockExecutor::new()));
+        let executor = self
+            .executor
+            .unwrap_or_else(|| Box::new(MockExecutor::new()));
         let bindings_fn = self
             .bindings_fn
             .unwrap_or_else(|| Box::new(|_, _| IndexMap::new()));

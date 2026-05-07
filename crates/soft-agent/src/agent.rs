@@ -54,10 +54,7 @@ impl AgentConfig {
         self
     }
 
-    pub fn mcp_servers(
-        mut self,
-        servers: impl IntoIterator<Item = impl Into<String>>,
-    ) -> Self {
+    pub fn mcp_servers(mut self, servers: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.mcp_servers = servers.into_iter().map(Into::into).collect();
         self
     }

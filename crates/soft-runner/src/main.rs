@@ -85,7 +85,9 @@ fn parse_duration(s: &str) -> Result<Duration, String> {
         "ms" => Ok(Duration::from_millis(n)),
         "s" => Ok(Duration::from_secs(n)),
         "m" => Ok(Duration::from_secs(n * 60)),
-        u => Err(format!("duration `{s}`: unknown unit `{u}` (expected ms|s|m)")),
+        u => Err(format!(
+            "duration `{s}`: unknown unit `{u}` (expected ms|s|m)"
+        )),
     }
 }
 
@@ -106,7 +108,9 @@ fn parse_args() -> Args {
     while let Some(flag) = iter.next() {
         match flag.as_str() {
             "--port" => {
-                let v = iter.next().unwrap_or_else(|| usage_exit("--port needs a value"));
+                let v = iter
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--port needs a value"));
                 port = Some(
                     v.parse()
                         .unwrap_or_else(|e| usage_exit(&format!("--port: {e}"))),
@@ -193,7 +197,9 @@ to protect POST /shutdown. Use --bind 127.0.0.1 for local-only, or supply a toke
 
 fn is_loopback_bind(addr: &str) -> bool {
     use std::net::IpAddr;
-    addr.parse::<IpAddr>().map(|ip| ip.is_loopback()).unwrap_or(false)
+    addr.parse::<IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false)
 }
 
 fn main() -> ExitCode {
@@ -262,11 +268,7 @@ fn main() -> ExitCode {
     };
 
     let listen = format!("{}:{}", args.bind, args.port);
-    let card = AgentCard::new(
-        &agent_name,
-        "soft-run agent",
-        format!("http://{listen}/"),
-    );
+    let card = AgentCard::new(&agent_name, "soft-run agent", format!("http://{listen}/"));
     let shutdown = Arc::new(AtomicBool::new(false));
     {
         // Best-effort SIGINT/SIGTERM handler. In some sandboxed environments
@@ -375,10 +377,7 @@ fn format_peers(peers: &HashMap<String, String>) -> String {
     if peers.is_empty() {
         return "{}".into();
     }
-    let mut parts: Vec<String> = peers
-        .iter()
-        .map(|(k, v)| format!("{k}=>{v}"))
-        .collect();
+    let mut parts: Vec<String> = peers.iter().map(|(k, v)| format!("{k}=>{v}")).collect();
     parts.sort();
     format!("{{{}}}", parts.join(", "))
 }
@@ -387,9 +386,6 @@ fn format_ticks(ticks: &[(String, Duration)]) -> String {
     if ticks.is_empty() {
         return "".into();
     }
-    let parts: Vec<String> = ticks
-        .iter()
-        .map(|(t, d)| format!("{t}@{:?}", d))
-        .collect();
+    let parts: Vec<String> = ticks.iter().map(|(t, d)| format!("{t}@{:?}", d)).collect();
     format!("  ticks=[{}]", parts.join(", "))
 }
