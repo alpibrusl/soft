@@ -32,12 +32,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use indexmap::IndexMap;
-use lex_bytecode::Value as LexValue;
 use lex_runtime::Policy;
 use serde_json::Value;
 use soft_a2a::{A2aRoutedExecutor, A2aServer, AgentCard};
-use soft_agent::{Action, Gate, LexHost, Mailbox, Metrics, Runner, StepReport, DSL_PREAMBLE};
+use soft_agent::{
+    default_float_bindings, Gate, LexHost, Mailbox, Metrics, Runner, StepReport, DSL_PREAMBLE,
+};
 
 use crate::anthropic::AnthropicCloudHandler;
 
@@ -286,7 +286,7 @@ fn main() -> ExitCode {
         );
         builder = builder
             .gate(gate)
-            .bindings_fn(Box::new(state_float_bindings));
+            .bindings_fn(Box::new(default_float_bindings));
     }
 
     let metrics = Arc::new(Metrics::new(&agent_name));
@@ -433,24 +433,4 @@ fn format_ticks(ticks: &[(String, Duration)]) -> String {
     }
     let parts: Vec<String> = ticks.iter().map(|(t, d)| format!("{t}@{:?}", d)).collect();
     format!("  ticks=[{}]", parts.join(", "))
-}
-
-/// Default `BindingsFn` for soft-run: copy every top-level `Number`
-/// field of the agent's state into the spec gate's quantifier bindings
-/// under the same name, as `LexValue::Float`. This mirrors how
-/// `agents/*.spec` files quantify over state field names.
-///
-/// Action-derived bindings aren't included — the deploy specs only
-/// reason about state. If a future spec needs `delta_kw` from a
-/// SendA2a payload, extend this function (or specialize per-agent).
-fn state_float_bindings(state: &Value, _action: &Action) -> IndexMap<String, LexValue> {
-    let mut out = IndexMap::new();
-    if let Some(obj) = state.as_object() {
-        for (k, v) in obj {
-            if let Some(f) = v.as_f64() {
-                out.insert(k.clone(), LexValue::Float(f));
-            }
-        }
-    }
-    out
 }

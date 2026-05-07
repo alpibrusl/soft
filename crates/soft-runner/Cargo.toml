@@ -16,7 +16,6 @@ path = "src/main.rs"
 [dependencies]
 soft-agent   = { path = "../soft-agent" }
 soft-a2a     = { path = "../soft-a2a" }
-indexmap     = { workspace = true }   # spec gate bindings (state -> LexValue)
 lex-bytecode = { workspace = true }   # EffectHandler trait + Value
 lex-runtime  = { workspace = true }   # DefaultHandler we wrap
 lex-store    = { workspace = true }   # for --store / finalize on shutdown

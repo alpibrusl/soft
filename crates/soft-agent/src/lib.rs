@@ -18,6 +18,7 @@
 
 pub mod action;
 pub mod agent;
+pub mod bindings;
 pub mod effect;
 pub mod error;
 pub mod executor;
@@ -33,6 +34,7 @@ pub mod trace;
 
 pub use action::Action;
 pub use agent::{Agent, AgentConfig, AgentId};
+pub use bindings::default_float_bindings;
 pub use effect::{Effect, EffectSet};
 pub use error::Error;
 pub use executor::{ActionExecutor, ExecError, MockExecutor};
