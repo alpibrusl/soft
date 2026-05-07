@@ -121,6 +121,10 @@ soft-run <agent.lex> --port <N>
     [--store <path>]                   if set, finalize the trace here on shutdown
     [--llm-cloud-provider <name>]      `default` (OpenAI-shape, lex-runtime builtin)
                                        or `anthropic` (custom EffectHandler)
+    [--shutdown-token <T>]             or SOFT_SHUTDOWN_TOKEN env. Required
+                                       when --bind is non-loopback. When set,
+                                       POST /shutdown requires a matching
+                                       X-Shutdown-Token header.
 ```
 
 The `<agent.lex>` file must define a top-level `fn config() -> AgentConfig`
@@ -139,6 +143,16 @@ Two paths, in priority order:
    terminals; some sandboxed parents intercept signals before they
    reach our process. If the trace doesn't get persisted, fall back to
    the `POST /shutdown` path.
+
+`POST /shutdown` has no auth by default — safe only because the
+default `--bind` is `127.0.0.1`. If you bind to a non-loopback
+interface (e.g. `0.0.0.0` for cross-host A2A), `soft-run` will refuse
+to start without a `--shutdown-token` (or `SOFT_SHUTDOWN_TOKEN` env).
+Callers must then send `X-Shutdown-Token: <T>`:
+
+```bash
+curl -X POST -H "X-Shutdown-Token: $TOKEN" http://host:port/shutdown
+```
 
 ## Driving an LLM-backed handler
 

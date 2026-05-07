@@ -54,6 +54,7 @@ struct Args {
     ticks: Vec<(String, Duration)>,
     store: Option<PathBuf>,
     llm_cloud_provider: LlmCloudProvider,
+    shutdown_token: Option<String>,
 }
 
 fn usage_exit(msg: &str) -> ! {
@@ -65,7 +66,9 @@ fn usage_exit(msg: &str) -> ! {
             [--state-json <json>] \\\n  \
             [--bind <addr>]                   (default 127.0.0.1) \\\n  \
             [--store <path>]                  (persist trace on shutdown) \\\n  \
-            [--llm-cloud-provider <name>]     (default | anthropic)"
+            [--llm-cloud-provider <name>]     (default | anthropic) \\\n  \
+            [--shutdown-token <T>]            (or SOFT_SHUTDOWN_TOKEN env; \
+required when --bind is non-loopback)"
     );
     std::process::exit(2);
 }
@@ -98,6 +101,7 @@ fn parse_args() -> Args {
     let mut ticks = Vec::new();
     let mut store = None;
     let mut llm_cloud_provider = LlmCloudProvider::Default;
+    let mut shutdown_token: Option<String> = std::env::var("SOFT_SHUTDOWN_TOKEN").ok();
 
     while let Some(flag) = iter.next() {
         match flag.as_str() {
@@ -145,6 +149,12 @@ fn parse_args() -> Args {
                     .unwrap_or_else(|| usage_exit("--store needs a path"));
                 store = Some(PathBuf::from(p));
             }
+            "--shutdown-token" => {
+                let v = iter
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--shutdown-token needs a value"));
+                shutdown_token = Some(v);
+            }
             "--llm-cloud-provider" => {
                 let v = iter
                     .next()
@@ -162,6 +172,12 @@ fn parse_args() -> Args {
     }
 
     let port = port.unwrap_or_else(|| usage_exit("--port is required"));
+    if !is_loopback_bind(&bind) && shutdown_token.is_none() {
+        usage_exit(
+            "--bind is non-loopback; --shutdown-token (or SOFT_SHUTDOWN_TOKEN env) is required \
+to protect POST /shutdown. Use --bind 127.0.0.1 for local-only, or supply a token.",
+        );
+    }
     Args {
         agent_file,
         port,
@@ -171,7 +187,13 @@ fn parse_args() -> Args {
         ticks,
         store,
         llm_cloud_provider,
+        shutdown_token,
     }
+}
+
+fn is_loopback_bind(addr: &str) -> bool {
+    use std::net::IpAddr;
+    addr.parse::<IpAddr>().map(|ip| ip.is_loopback()).unwrap_or(false)
 }
 
 fn main() -> ExitCode {
@@ -262,7 +284,13 @@ fn main() -> ExitCode {
     }
 
     let server = match A2aServer::bind(&listen, card, sender) {
-        Ok(s) => s.with_shutdown_flag(Arc::clone(&shutdown)),
+        Ok(s) => {
+            let mut s = s.with_shutdown_flag(Arc::clone(&shutdown));
+            if let Some(tok) = args.shutdown_token.clone() {
+                s = s.with_shutdown_token(tok);
+            }
+            s
+        }
         Err(e) => {
             eprintln!("bind {listen}: {e}");
             return ExitCode::from(1);

@@ -24,11 +24,16 @@
 //! - `ANTHROPIC_VERSION` — defaults to `2023-06-01` (Anthropic's stable
 //!   header value).
 
+use std::time::Duration;
+
 use lex_bytecode::{vm::EffectHandler, Value};
 use lex_runtime::{DefaultHandler, Policy};
 
+const ANTHROPIC_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub struct AnthropicCloudHandler {
     inner: DefaultHandler,
+    agent: ureq::Agent,
     api_key: String,
     base_url: String,
     model: String,
@@ -53,8 +58,13 @@ impl AnthropicCloudHandler {
         let api_version = std::env::var("ANTHROPIC_VERSION")
             .unwrap_or_else(|_| "2023-06-01".into());
 
+        let agent = ureq::AgentBuilder::new()
+            .timeout(ANTHROPIC_HTTP_TIMEOUT)
+            .build();
+
         Some(Self {
             inner: DefaultHandler::new(policy),
+            agent,
             api_key,
             base_url,
             model,
@@ -91,7 +101,9 @@ impl AnthropicCloudHandler {
         });
 
         let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
-        let resp = ureq::post(&url)
+        let resp = self
+            .agent
+            .post(&url)
             .set("x-api-key", &self.api_key)
             .set("anthropic-version", &self.api_version)
             .set("content-type", "application/json")
