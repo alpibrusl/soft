@@ -16,6 +16,7 @@
 //! Trace records are flushed at [`Runner::finalize`].
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use indexmap::IndexMap;
@@ -26,6 +27,7 @@ use crate::{
     executor::{ActionExecutor, MockExecutor},
     gate::{action_to_json, Gate, Verdict},
     lex_host::LexHost,
+    metrics::Metrics,
     trace::TraceWriter,
     A2aMessage, Action, Agent, Error, Mailbox, MailboxSender,
 };
@@ -35,6 +37,23 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn action_kind(action: &Action) -> &'static str {
+    match action {
+        Action::CallMcp { .. } => "call_mcp",
+        Action::SendA2a { .. } => "send_a2a",
+        Action::LocalLlm { .. } => "local_llm",
+        Action::CloudLlm { .. } => "cloud_llm",
+    }
+}
+
+fn verdict_label(v: &Verdict) -> &'static str {
+    match v {
+        Verdict::Allow => "Allow",
+        Verdict::Deny { .. } => "Deny",
+        Verdict::Inconclusive { .. } => "Inconclusive",
+    }
 }
 
 fn bindings_to_json(b: &IndexMap<String, LexValue>) -> Value {
@@ -79,6 +98,7 @@ pub struct Runner {
     bindings_fn: BindingsFn,
     executor: Box<dyn ActionExecutor>,
     trace: TraceWriter,
+    metrics: Arc<Metrics>,
 }
 
 impl Runner {
@@ -125,26 +145,41 @@ impl Runner {
     pub fn step(&mut self) -> Result<StepReport, Error> {
         let msg = match self.mailbox.try_recv() {
             Some(m) => m,
-            None => return Ok(StepReport::Idle),
+            None => {
+                self.metrics.inc_step("Idle");
+                return Ok(StepReport::Idle);
+            }
         };
+        self.metrics.inc_message(&msg.topic);
+        if msg.from == "self" {
+            self.metrics.inc_tick(&msg.topic);
+        }
         self.trace.record_effect(
             "a2a.received",
             json!({"from": msg.from, "topic": msg.topic, "payload": msg.payload}),
             Ok(Value::Null),
         );
 
-        let proposed = dispatch(
+        let proposed = match dispatch(
             &mut self.state,
             &mut self.handlers,
             self.lex_host.as_ref(),
             &msg,
-        )?;
+        ) {
+            Ok(p) => p,
+            Err(e) => {
+                self.metrics.inc_step("Error");
+                return Err(e);
+            }
+        };
 
         let mut allowed = 0usize;
         let mut denied = 0usize;
 
         for action in &proposed {
             let summary = action_to_json(action);
+            let kind = action_kind(action);
+            self.metrics.inc_action_proposed(kind);
             self.trace
                 .record_effect("action.proposed", summary.clone(), Ok(Value::Null));
 
@@ -181,11 +216,13 @@ impl Runner {
                     });
                     self.trace
                         .record_effect("gate.verdict", summary.clone(), Ok(verdict_json));
+                    self.metrics.inc_gate_verdict(verdict_label(&verdict));
                     matches!(verdict, Verdict::Allow)
                 }
                 None => true,
             };
             if !gate_ok {
+                self.metrics.inc_action_denied(kind, "gate");
                 denied += 1;
                 continue;
             }
@@ -198,19 +235,30 @@ impl Runner {
                         summary.clone(),
                         Err(format!("mcp server `{server}` not in allowlist")),
                     );
+                    self.metrics.inc_action_denied(kind, "mcp_allowlist");
                     denied += 1;
                     continue;
                 }
             }
 
-            // Execute
+            // Execute. Executor errors don't count as denials — the
+            // action passed all gates; the failure is downstream and is
+            // recorded in the trace's `action.executed` outcome.
             let outcome = self.executor.execute(action).map_err(|e| e.to_string());
             self.trace
                 .record_effect("action.executed", summary, outcome);
+            self.metrics.inc_action_allowed(kind);
             allowed += 1;
         }
 
+        self.metrics.inc_step("Processed");
         Ok(StepReport::Processed { allowed, denied })
+    }
+
+    /// Read-only access to this runner's metrics handle. Cloneable
+    /// `Arc` — share with the soft-a2a server's `/metrics` route.
+    pub fn metrics(&self) -> Arc<Metrics> {
+        Arc::clone(&self.metrics)
     }
 
     /// Drain the mailbox, processing each pending message.
@@ -343,6 +391,7 @@ pub struct RunnerBuilder {
     bindings_fn: Option<BindingsFn>,
     executor: Option<Box<dyn ActionExecutor>>,
     ticks: Vec<TickSpec>,
+    metrics: Option<Arc<Metrics>>,
 }
 
 /// One periodic tick configured on the runner. The tick thread sends a
@@ -421,6 +470,16 @@ impl RunnerBuilder {
         self
     }
 
+    /// Provide a shared [`Metrics`] handle. If not set, the runner
+    /// constructs its own private one (still readable via
+    /// [`Runner::metrics`]). Pass an explicit `Arc<Metrics>` when you
+    /// want the soft-a2a `/metrics` route to read the same counters
+    /// the runner increments.
+    pub fn metrics(mut self, m: Arc<Metrics>) -> Self {
+        self.metrics = Some(m);
+        self
+    }
+
     /// Register a periodic self-tick. Every `duration`, the runner's
     /// mailbox receives an [`A2aMessage`] with `from = "self"`, the given
     /// `topic`, and a `null` payload. Useful for self-initiated agents
@@ -489,6 +548,10 @@ impl RunnerBuilder {
             });
         }
 
+        let metrics = self
+            .metrics
+            .unwrap_or_else(|| Arc::new(Metrics::new(agent.id().as_str())));
+
         Ok(Runner {
             agent,
             state,
@@ -499,6 +562,7 @@ impl RunnerBuilder {
             bindings_fn,
             executor,
             trace,
+            metrics,
         })
     }
 }

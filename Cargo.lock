@@ -1702,6 +1702,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "soft-trace-viewer"
+version = "0.0.0"
+dependencies = [
+ "lex-store",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tiny_http",
+ "ureq 2.12.1",
+]
+
+[[package]]
 name = "spec-checker"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

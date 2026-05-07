@@ -35,7 +35,7 @@ use std::time::Duration;
 use lex_runtime::Policy;
 use serde_json::Value;
 use soft_a2a::{A2aRoutedExecutor, A2aServer, AgentCard};
-use soft_agent::{LexHost, Mailbox, Runner, StepReport, DSL_PREAMBLE};
+use soft_agent::{LexHost, Mailbox, Metrics, Runner, StepReport, DSL_PREAMBLE};
 
 use crate::anthropic::AnthropicCloudHandler;
 
@@ -248,10 +248,12 @@ fn main() -> ExitCode {
         .expect("from_lex_host sets agent")
         .to_string();
 
+    let metrics = Arc::new(Metrics::new(&agent_name));
     let (mailbox, sender) = Mailbox::new();
     builder = builder
         .mailbox(mailbox)
         .state(args.initial_state)
+        .metrics(Arc::clone(&metrics))
         .executor(Box::new(A2aRoutedExecutor::new(
             &agent_name,
             args.peers.clone(),
@@ -287,7 +289,9 @@ fn main() -> ExitCode {
 
     let server = match A2aServer::bind(&listen, card, sender) {
         Ok(s) => {
-            let mut s = s.with_shutdown_flag(Arc::clone(&shutdown));
+            let mut s = s
+                .with_shutdown_flag(Arc::clone(&shutdown))
+                .with_metrics(Arc::clone(&metrics));
             if let Some(tok) = args.shutdown_token.clone() {
                 s = s.with_shutdown_token(tok);
             }

@@ -1,0 +1,150 @@
+################################################################
+# Four-agent demo fleet over A2A (vehicle, depot, tms, pv) plus a
+# trace viewer. Each agent runs as its own container and discovers
+# peers via Docker's service-name DNS.
+#
+#   docker compose up --build
+#
+# Then:
+#   - Vehicle:    http://localhost:8001  /a2a/agent-card  /metrics
+#   - Depot:      http://localhost:8002
+#   - TMS:        http://localhost:8003
+#   - PV:         http://localhost:8004
+#   - Trace UI:   http://localhost:8080
+#
+# Graceful teardown:
+#   docker compose down --timeout 5
+#
+# Each runner exits cleanly on POST /shutdown (sent by docker stop's
+# stop_grace_period) and finalizes its trace into the shared volume.
+################################################################
+
+services:
+  vehicle:
+    build: .
+    image: soft:local
+    command:
+      - agents/vehicle.lex
+      - --port=8001
+      - --bind=0.0.0.0
+      - --store=/traces
+      - --peer=depot=http://depot:8002
+      - --peer=depot2=http://depot:8002
+      - --peer=tms=http://tms:8003
+      - --state-json={"soc":0.30,"reserve":0.20,"energy_needed":0.30,"tried":0}
+    environment:
+      SOFT_SHUTDOWN_TOKEN: ${SOFT_SHUTDOWN_TOKEN:-localdev}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8001:8001"
+    volumes:
+      - traces:/traces
+    networks: [soft]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/healthz"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    stop_grace_period: 5s
+    restart: unless-stopped
+
+  depot:
+    build: .
+    image: soft:local
+    command:
+      - agents/depot.lex
+      - --port=8002
+      - --bind=0.0.0.0
+      - --store=/traces
+      - --peer=vehicle=http://vehicle:8001
+      - --state-json={"current_kw":30.0,"budget_kw":100.0,"pv_kw":0.0,"requested_kw":50.0}
+    environment:
+      SOFT_SHUTDOWN_TOKEN: ${SOFT_SHUTDOWN_TOKEN:-localdev}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8002:8002"
+    volumes:
+      - traces:/traces
+    networks: [soft]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/healthz"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    stop_grace_period: 5s
+    restart: unless-stopped
+
+  tms:
+    build: .
+    image: soft:local
+    command:
+      - agents/tms.lex
+      - --port=8003
+      - --bind=0.0.0.0
+      - --store=/traces
+      - --state-json={"running":true}
+    environment:
+      SOFT_SHUTDOWN_TOKEN: ${SOFT_SHUTDOWN_TOKEN:-localdev}
+    ports:
+      - "8003:8003"
+    volumes:
+      - traces:/traces
+    networks: [soft]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8003/healthz"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    stop_grace_period: 5s
+    restart: unless-stopped
+
+  pv:
+    build: .
+    image: soft:local
+    command:
+      - agents/pv.lex
+      - --port=8004
+      - --bind=0.0.0.0
+      - --store=/traces
+      - --peer=depot=http://depot:8002
+      - --tick=Tick=2s
+      - --state-json={"pv_kw":25.0}
+    environment:
+      SOFT_SHUTDOWN_TOKEN: ${SOFT_SHUTDOWN_TOKEN:-localdev}
+    ports:
+      - "8004:8004"
+    volumes:
+      - traces:/traces
+    networks: [soft]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8004/healthz"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    stop_grace_period: 5s
+    restart: unless-stopped
+
+  trace-viewer:
+    build: .
+    image: soft:local
+    entrypoint: ["/usr/local/bin/soft-trace-viewer"]
+    command:
+      - --store=/traces
+      - --bind=0.0.0.0:8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - traces:/traces
+    networks: [soft]
+    restart: unless-stopped
+
+volumes:
+  traces:
+
+networks:
+  soft:
+    driver: bridge

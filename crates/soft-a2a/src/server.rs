@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use serde_json::json;
-use soft_agent::MailboxSender;
+use soft_agent::{MailboxSender, Metrics};
 use tiny_http::{Header, Method, Request, Response, Server};
 
 use crate::wire::{parts_to_payload, AgentCard, Message};
@@ -29,6 +29,7 @@ pub struct A2aServer {
     sender: MailboxSender,
     shutdown: Option<Arc<AtomicBool>>,
     shutdown_token: Option<String>,
+    metrics: Option<Arc<Metrics>>,
 }
 
 impl A2aServer {
@@ -41,6 +42,7 @@ impl A2aServer {
             sender,
             shutdown: None,
             shutdown_token: None,
+            metrics: None,
         })
     }
 
@@ -68,6 +70,14 @@ impl A2aServer {
         self
     }
 
+    /// Wire a runner's [`Metrics`] handle so `GET /metrics` can serve
+    /// the current counter snapshot in Prometheus text format. Without
+    /// this call, `/metrics` returns 404.
+    pub fn with_metrics(mut self, metrics: Arc<Metrics>) -> Self {
+        self.metrics = Some(metrics);
+        self
+    }
+
     /// The local socket address the server is listening on.
     pub fn local_addr(&self) -> Option<String> {
         self.server.server_addr().to_ip().map(|a| a.to_string())
@@ -82,6 +92,7 @@ impl A2aServer {
             sender,
             shutdown,
             shutdown_token,
+            metrics,
         } = self;
         for req in server.incoming_requests() {
             handle(
@@ -90,6 +101,7 @@ impl A2aServer {
                 &sender,
                 shutdown.as_ref(),
                 shutdown_token.as_deref(),
+                metrics.as_ref(),
             );
         }
     }
@@ -106,9 +118,20 @@ fn handle(
     sender: &MailboxSender,
     shutdown: Option<&Arc<AtomicBool>>,
     shutdown_token: Option<&str>,
+    metrics: Option<&Arc<Metrics>>,
 ) {
     match (req.method(), req.url()) {
         (Method::Get, "/a2a/agent-card") => respond_json(req, card, 200),
+        (Method::Get, "/healthz") => respond_json(req, &json!({"ok": true}), 200),
+        (Method::Get, "/metrics") => match metrics {
+            Some(m) => respond_text_with_type(
+                req,
+                &m.render_prometheus(),
+                200,
+                "text/plain; version=0.0.4",
+            ),
+            None => respond_text(req, "metrics not configured", 404),
+        },
         (Method::Post, "/a2a/messages") => handle_message(req, sender),
         (Method::Post, "/shutdown") => handle_shutdown(req, shutdown, shutdown_token),
         _ => respond_text(req, "not found", 404),
@@ -200,5 +223,16 @@ fn respond_json<T: serde::Serialize>(req: Request, body: &T, status: u16) {
 
 fn respond_text(req: Request, body: &str, status: u16) {
     let resp = Response::from_string(body).with_status_code(status);
+    let _ = req.respond(resp);
+}
+
+fn respond_text_with_type(req: Request, body: &str, status: u16, content_type: &str) {
+    let header = match Header::from_bytes(b"Content-Type", content_type.as_bytes()) {
+        Ok(h) => h,
+        Err(_) => return respond_text(req, body, status),
+    };
+    let resp = Response::from_string(body)
+        .with_header(header)
+        .with_status_code(status);
     let _ = req.respond(resp);
 }
