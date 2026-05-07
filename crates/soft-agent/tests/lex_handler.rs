@@ -3,9 +3,7 @@
 //! returned action list, and runs the action through the gate + executor.
 
 use serde_json::json;
-use soft_agent::{
-    A2aMessage, Action, AgentConfig, Effect, LexHost, Mailbox, Runner,
-};
+use soft_agent::{A2aMessage, Action, AgentConfig, Effect, LexHost, Mailbox, Runner};
 use tempfile::tempdir;
 
 /// Lex handler module. Defines `on_ping` which echoes the sender's name

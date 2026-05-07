@@ -13,9 +13,7 @@
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
 use serde_json::{json, Value};
-use soft_agent::{
-    A2aMessage, Action, Gate, InProcessRouter, Mailbox, MailboxSender, Runner,
-};
+use soft_agent::{A2aMessage, Action, Gate, InProcessRouter, Mailbox, MailboxSender, Runner};
 use tempfile::tempdir;
 
 const HOST: &str = r#"
@@ -191,9 +189,15 @@ fn vehicle_bindings_fn() -> soft_agent::BindingsFn {
         } else {
             0.0
         };
-        m.insert("current_soc".into(), LexValue::Float(fnum(state, "soc", 1.0)));
+        m.insert(
+            "current_soc".into(),
+            LexValue::Float(fnum(state, "soc", 1.0)),
+        );
         m.insert("energy_used".into(), LexValue::Float(used));
-        m.insert("reserve".into(), LexValue::Float(fnum(state, "reserve", 0.2)));
+        m.insert(
+            "reserve".into(),
+            LexValue::Float(fnum(state, "reserve", 0.2)),
+        );
         m
     })
 }
@@ -210,9 +214,15 @@ fn depot_bindings_fn() -> soft_agent::BindingsFn {
         } else {
             0.0
         };
-        m.insert("current_kw".into(), LexValue::Float(fnum(state, "current_kw", 0.0)));
+        m.insert(
+            "current_kw".into(),
+            LexValue::Float(fnum(state, "current_kw", 0.0)),
+        );
         m.insert("delta_kw".into(), LexValue::Float(delta));
-        m.insert("grid_kw".into(), LexValue::Float(fnum(state, "budget_kw", 0.0)));
+        m.insert(
+            "grid_kw".into(),
+            LexValue::Float(fnum(state, "budget_kw", 0.0)),
+        );
         m.insert("pv_kw".into(), LexValue::Float(fnum(state, "pv_kw", 0.0)));
         m
     })
@@ -260,12 +270,7 @@ fn build_runners(
     Ok((vehicle, depot, tms, v_send))
 }
 
-fn drain_until_quiescent(
-    label: &str,
-    vehicle: &mut Runner,
-    depot: &mut Runner,
-    tms: &mut Runner,
-) {
+fn drain_until_quiescent(label: &str, vehicle: &mut Runner, depot: &mut Runner, tms: &mut Runner) {
     let mut totals = [(0usize, 0usize); 3];
     for round in 0..20 {
         let v = vehicle.drain().unwrap();
@@ -281,9 +286,7 @@ fn drain_until_quiescent(
             println!(
                 "  {label}: settled after {round} rounds; \
                  v(allow={},deny={}) d(allow={},deny={}) t(allow={},deny={})",
-                totals[0].0, totals[0].1,
-                totals[1].0, totals[1].1,
-                totals[2].0, totals[2].1,
+                totals[0].0, totals[0].1, totals[1].0, totals[1].1, totals[2].0, totals[2].1,
             );
             return;
         }
@@ -294,9 +297,12 @@ fn drain_until_quiescent(
 fn run_scenario(scenario: &Scenario, store: &lex_store::Store) -> Vec<lex_trace::RunId> {
     println!("\n=== Scenario {} ===", scenario.label);
     let router = InProcessRouter::new();
-    let (mut vehicle, mut depot, mut tms, vehicle_seed) =
-        build_runners(&router, scenario.vehicle_state.clone(), scenario.depot_state.clone())
-            .unwrap();
+    let (mut vehicle, mut depot, mut tms, vehicle_seed) = build_runners(
+        &router,
+        scenario.vehicle_state.clone(),
+        scenario.depot_state.clone(),
+    )
+    .unwrap();
 
     vehicle_seed
         .send(A2aMessage {
@@ -316,8 +322,7 @@ fn run_scenario(scenario: &Scenario, store: &lex_store::Store) -> Vec<lex_trace:
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
-        "=== multi-agent depot demo ({} authored entirely in Lex via DSL) ===",
-        "vehicle + depot + tms"
+        "=== multi-agent depot demo (vehicle + depot + tms authored entirely in Lex via DSL) ==="
     );
 
     let dir = tempdir()?;
@@ -356,8 +361,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!(
         "  proposed={} allowed={} denied={} inconclusive={} executed={} skipped={}",
-        totals.proposed, totals.allowed, totals.denied,
-        totals.inconclusive, totals.executed, totals.skipped,
+        totals.proposed,
+        totals.allowed,
+        totals.denied,
+        totals.inconclusive,
+        totals.executed,
+        totals.skipped,
     );
     if totals.has_violation() {
         return Err("replay invariant violated".into());

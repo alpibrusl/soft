@@ -174,7 +174,10 @@ pub fn parse_lex_config(value: &LexValue) -> Result<LexAgentSetup, Error> {
         builder = builder.system_prompt(system_prompt);
     }
 
-    Ok(LexAgentSetup { config: builder, handlers })
+    Ok(LexAgentSetup {
+        config: builder,
+        handlers,
+    })
 }
 
 fn effect_from_name(s: &str) -> Option<Effect> {

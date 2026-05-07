@@ -38,16 +38,11 @@ impl A2aClient {
 
     /// GET the peer's [`AgentCard`].
     pub fn fetch_agent_card(&self, peer_base_url: &str) -> Result<AgentCard, Error> {
-        let url = format!(
-            "{}/a2a/agent-card",
-            peer_base_url.trim_end_matches('/')
-        );
+        let url = format!("{}/a2a/agent-card", peer_base_url.trim_end_matches('/'));
         let resp = ureq::get(&url)
             .call()
             .map_err(|e| Error::Http(e.to_string()))?;
-        let card: AgentCard = resp
-            .into_json()
-            .map_err(|e| Error::Decode(e.to_string()))?;
+        let card: AgentCard = resp.into_json().map_err(|e| Error::Decode(e.to_string()))?;
         Ok(card)
     }
 }

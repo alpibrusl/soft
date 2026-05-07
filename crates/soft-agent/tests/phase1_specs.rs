@@ -106,7 +106,7 @@ fn both_specs_compile_into_one_gate() {
     let gate = Gate::from_sources(&[GRID_BUDGET_SPEC, SOC_RESERVE_SPEC], HOST).unwrap();
     assert_eq!(gate.spec_count(), 2);
 
-    let mut bindings = float_bindings(&[
+    let bindings = float_bindings(&[
         ("current_kw", 80.0),
         ("delta_kw", 30.0),
         ("grid_kw", 100.0),

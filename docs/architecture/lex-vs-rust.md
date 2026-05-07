@@ -1,6 +1,6 @@
 # Lex vs Rust: where the boundary actually sits
 
-> **TL;DR.** A 100% Lex system isn't realistic — *something* has to host the Lex VM, expose effect handlers to the OS, and integrate with external libraries (HTTP, MCP wire, JSON, content-addressed storage). That host is Rust today. **Everything above the host can be Lex** and is, in soft-agent v7: agent config, topic→handler mapping, handler decision logic, specs, and spec helpers all live in `.lex` source.
+> **TL;DR.** A 100% Lex system isn't realistic — *something* has to host the Lex VM, expose effect handlers to the OS, and integrate with external libraries (HTTP, MCP wire, JSON, content-addressed storage). That host is Rust today. **Everything above the host can be Lex** and is, post-v0.2.2: agent config, topic→handler mapping, handler decision logic, specs, spec helpers, *and the LLM call itself* all live in `.lex` source. The Rust beneath is project infrastructure plus thin effect-handler implementations.
 
 This doc breaks down what's left in Rust and why.
 
@@ -36,7 +36,7 @@ The remaining Rust falls into four buckets. Each tells a different story about w
 
 `tiny_http`, `ureq`, `serde_json`. These are Rust crates with no Lex equivalent. soft-a2a's `wire.rs`, `server.rs`, `client.rs` are thin adapters around them.
 
-We could expose these as Lex effects (`[http_server]`, `[json]`) — and a few are already exposed (`agent.call_mcp`, `agent.send_a2a`). But the *implementation* of the effect handler stays in Rust because it has to call into the underlying crate.
+We could expose these as Lex effects (`[http_server]`, `[json]`) — and most of the ones soft cares about already are: `agent.call_mcp` (lex-runtime 0.2 / PR #190), `agent.send_a2a`, `agent.local_complete` and `agent.cloud_complete` (lex-runtime 0.2.2 / PR #203). The *implementation* of each effect handler stays in Rust because it has to call into the underlying crate (`ureq` for the LLM HTTP path, `tiny_http`-spawned subprocesses for MCP, etc.). User code calling those effects is Lex.
 
 **Verdict: stays Rust. Lex sees the effect surface, Rust implements the handler.**
 
@@ -56,18 +56,19 @@ This bucket grows when the boundary is "wide" (lots of types crossing) and shrin
 
 **Verdict: shrinks naturally as the boundary stabilizes; not something to optimize away.**
 
-## Lines-of-code distribution after v7
+## Lines-of-code distribution (post-v0.2.2)
 
-| Layer | Where | Lines |
+| Layer | Where | Approx |
 |---|---|---|
-| Lex (compiling, exercised) | inline `r#"..."#` in tests/examples | ~480 (was 315 before DSL + multi_depot refactor) |
-| Lex (aspirational, not compiling) | `examples/phase1/*.lex` standalone files | 374 |
-| Rust runtime infrastructure | soft-agent `src/` excluding lex-side glue | ~2,400 |
-| Rust glue (FFI, parsers, action conversion) | soft-agent `src/{lex_dsl, lex_host, gate}.rs` etc. | ~600 |
-| Rust A2A wire | soft-a2a `src/` | ~290 |
-| Rust tests + examples | both crates `tests/` + `examples/` | ~1,400 |
+| Lex (canonical agent files) | `agents/*.lex` (vehicle, depot, tms, pv, llm_driver) | ~270 |
+| Lex (compiling, exercised) | inline `r#"..."#` in tests + the DSL preamble | ~600 |
+| Rust runtime infrastructure | soft-agent `src/` excluding lex-side glue | ~2,500 |
+| Rust glue (FFI, DSL parser, action conversion) | soft-agent `src/{lex_dsl, lex_host, gate}.rs` etc. | ~600 |
+| Rust A2A wire + routed executor | soft-a2a `src/` | ~370 |
+| Rust runner CLI | soft-runner `src/main.rs` | ~190 |
+| Rust tests + examples | all three crates' `tests/` + `examples/` | ~1,800 |
 
-The user-authored part of any new agent (config + handlers + spec helpers + specs) is **100% Lex**. The Rust is project-side infrastructure.
+The user-authored part of any new agent (config + handlers + spec helpers + specs + LLM prompts) is **100% Lex**. The Rust is project-side infrastructure that any language runtime needs (VM, I/O, persistence) plus the soft-specific orchestration glue.
 
 ## What 100% Lex would actually require
 

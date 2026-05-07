@@ -87,6 +87,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block2"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5"
+dependencies = [
+ "objc2",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -125,6 +134,12 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrono"
@@ -276,6 +291,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctrlc"
+version = "3.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0b1fab2ae45819af2d0731d60f2afe17227ebb1a1538a236da84c93e9a60162"
+dependencies = [
+ "dispatch2",
+ "nix",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ctutils"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -310,6 +336,18 @@ dependencies = [
  "const-oid",
  "crypto-common 0.2.1",
  "ctutils",
+]
+
+[[package]]
+name = "dispatch2"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
+dependencies = [
+ "bitflags 2.11.1",
+ "block2",
+ "libc",
+ "objc2",
 ]
 
 [[package]]
@@ -789,9 +827,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "lex-ast"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c7b719ad9eb50d25baff7d4f4ff35932b3ccb0912692002ee8b074eddbdba51"
+checksum = "193746218e17591b7359ce811be4db29d69e4628ffa8317daa79a14abd992b32"
 dependencies = [
  "indexmap",
  "lex-syntax",
@@ -803,9 +841,9 @@ dependencies = [
 
 [[package]]
 name = "lex-bytecode"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2961c2f75080062d81e064c5b60c0d1bf419e9d515f2cb460f3218c41b19f505"
+checksum = "ef81d65b95ae08737250ce5bbba5e1c6fead37a021db61407e273a5c6fb0da40"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -817,9 +855,9 @@ dependencies = [
 
 [[package]]
 name = "lex-runtime"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdc69e5a7d64564bee73cf0ac39543c5e1fa310434ddf3b69a5be78c62965fc9"
+checksum = "4cad8704631006fc2e83d776b9b0656a5c5618fe434906f806826acda2b80400"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -850,9 +888,9 @@ dependencies = [
 
 [[package]]
 name = "lex-store"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f8e33ccf2c8bdf70252c62a2dd0a25131e40c846b81e04f922c499c9c31d5f3"
+checksum = "c3a0499d38613734a61b17f2e3b1990a70781727a79120388d8faff3f47e5e54"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -867,9 +905,9 @@ dependencies = [
 
 [[package]]
 name = "lex-syntax"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e6be00c4671fc69531530b28aff745374dad1a1216aa8af57c31235137a89eb"
+checksum = "2651d1ca239b464f85933ee7064196b941507471ec12bbb83dd8894ecd8d7062"
 dependencies = [
  "indexmap",
  "logos",
@@ -881,9 +919,9 @@ dependencies = [
 
 [[package]]
 name = "lex-trace"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c6f4867cd96a6b65aef20ec6849529670318bb6ff9f5fd5f57780a5161f95a1"
+checksum = "862df7cfeeab3fe253288c607d340accb6ff03ee8d872c64caa85a0b23a9f621"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -896,9 +934,9 @@ dependencies = [
 
 [[package]]
 name = "lex-types"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41797c7811790d9448e1f0b45dcf412ef3c00fdf6de1b776cffee8a5a29d4071"
+checksum = "c46a7d43f3fd95109f46dececd9b380a9cf9296421a2486b160f4d2672978775"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -909,9 +947,9 @@ dependencies = [
 
 [[package]]
 name = "lex-vcs"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d0e00b1c235b4329e9bf2b3528b75e648904bda55d59d43420ca03190845bd"
+checksum = "3fc06235df03c69f4ca4dda25d8cb4d0dd56aac29d2dee32395b9637709080d0"
 dependencies = [
  "indexmap",
  "lex-ast",
@@ -1025,6 +1063,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.31.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d6d0705320c1e6ba1d912b5e37cf18071b6c2e9b7fa8215a1e8a7651966f5d3"
+dependencies = [
+ "bitflags 2.11.1",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1032,6 +1082,21 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
 ]
+
+[[package]]
+name = "objc2"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f"
+dependencies = [
+ "objc2-encode",
+]
+
+[[package]]
+name = "objc2-encode"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33"
 
 [[package]]
 name = "once_cell"
@@ -1622,10 +1687,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "soft-runner"
+version = "0.0.0"
+dependencies = [
+ "ctrlc",
+ "lex-bytecode",
+ "lex-runtime",
+ "lex-store",
+ "lex-trace",
+ "serde_json",
+ "soft-a2a",
+ "soft-agent",
+ "ureq 2.12.1",
+]
+
+[[package]]
 name = "spec-checker"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f34f31bb976a31852fd3e0bdab5dd5bc2a13a5b7cd548fd832269572c6f5d9c"
+checksum = "4e2a5b9444e5ad3b939a0efb7ef42ae3ccd19764b615b45a6d8a3f14dfc28950"
 dependencies = [
  "indexmap",
  "lex-ast",

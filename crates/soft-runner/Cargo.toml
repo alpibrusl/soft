@@ -1,0 +1,25 @@
+[package]
+name = "soft-runner"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "CLI launcher for a single soft-agent: loads an agent.lex file, exposes A2A on a port, routes outbound SendA2a to peer URLs."
+publish = false
+
+[[bin]]
+name = "soft-run"
+path = "src/main.rs"
+
+[dependencies]
+soft-agent   = { path = "../soft-agent" }
+soft-a2a     = { path = "../soft-a2a" }
+lex-bytecode = { workspace = true }   # EffectHandler trait + Value
+lex-runtime  = { workspace = true }   # DefaultHandler we wrap
+lex-store    = { workspace = true }   # for --store / finalize on shutdown
+lex-trace    = { workspace = true }
+serde_json   = { workspace = true }
+ureq         = { workspace = true }   # Anthropic Messages API
+ctrlc        = { version = "3", features = ["termination"] }   # SIGTERM + SIGINT

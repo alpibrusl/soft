@@ -37,7 +37,7 @@ pub use error::Error;
 pub use executor::{ActionExecutor, ExecError, MockExecutor};
 pub use gate::{Gate, Verdict};
 pub use lex_dsl::{parse_lex_config, LexAgentSetup, DSL_PREAMBLE};
-pub use lex_host::{LexCall, LexHost};
+pub use lex_host::{HandlerFactory, LexCall, LexHost};
 pub use mailbox::{A2aMessage, Mailbox, MailboxSender};
 pub use router::{InProcessExecutor, InProcessRouter};
 pub use runner::{BindingsFn, DrainReport, Handler, Runner, RunnerBuilder, StepReport};

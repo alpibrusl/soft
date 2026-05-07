@@ -22,7 +22,10 @@ fn under_budget(current :: Float, delta :: Float, grid :: Float, pv :: Float) ->
 fn lex_host_calls_simple_function() {
     let host = LexHost::from_source(HELPERS).expect("compiles");
     let result = host
-        .call("projected_load", vec![Value::Float(80.0), Value::Float(30.0)])
+        .call(
+            "projected_load",
+            vec![Value::Float(80.0), Value::Float(30.0)],
+        )
         .expect("call ok");
     assert_eq!(result.value, Value::Float(110.0));
     assert_eq!(result.tree.root_target, "projected_load");

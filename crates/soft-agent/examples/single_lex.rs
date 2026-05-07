@@ -85,9 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "  effects: {:?}",
         agent.effects().iter().map(|e| e.name()).collect::<Vec<_>>()
     );
-    println!(
-        "  mcp allowlist (runtime): {{telemetry, local_planner}} — `ocpp` blocked"
-    );
+    println!("  mcp allowlist (runtime): {{telemetry, local_planner}} — `ocpp` blocked");
     println!("  system prompt: {:?}", agent.system_prompt());
     println!();
 

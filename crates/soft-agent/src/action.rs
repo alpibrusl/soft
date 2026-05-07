@@ -85,8 +85,12 @@ impl Action {
                 topic: s("a2a_topic"),
                 payload: parse_json_str_field("payload_json"),
             }),
-            "local_llm" => Ok(Action::LocalLlm { prompt: s("prompt") }),
-            "cloud_llm" => Ok(Action::CloudLlm { prompt: s("prompt") }),
+            "local_llm" => Ok(Action::LocalLlm {
+                prompt: s("prompt"),
+            }),
+            "cloud_llm" => Ok(Action::CloudLlm {
+                prompt: s("prompt"),
+            }),
             other => Err(crate::Error::Spec(format!(
                 "unknown action kind: `{other}`"
             ))),

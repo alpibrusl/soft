@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/soft-agent",
     "crates/soft-a2a",
+    "crates/soft-runner",
 ]
 
 [workspace.package]

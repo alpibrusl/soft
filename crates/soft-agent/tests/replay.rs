@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
 use serde_json::json;
 use soft_agent::{
-    replay::scan_trace, Action, AgentConfig, Effect, Gate, Mailbox, Runner, A2aMessage,
+    replay::scan_trace, A2aMessage, Action, AgentConfig, Effect, Gate, Mailbox, Runner,
 };
 use tempfile::tempdir;
 

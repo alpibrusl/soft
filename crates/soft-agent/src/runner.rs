@@ -4,32 +4,30 @@
 //! Pipeline per inbound message:
 //!
 //! 1. Trace `a2a.received`.
-//! 2. Dispatch to the topic handler (Rust closure or Lex function);
-//!    collect proposed actions.
-//! 3. For each action:
-//!    a. Trace `action.proposed`.
-//!    b. If a gate is configured, evaluate; trace `gate.verdict`.
-//!       Inconclusive is treated as Deny by default.
-//!    c. If the action is `CallMcp`, check `Agent::allows_mcp_server`
-//!       (per-server runtime allowlist; lex 0.2 ships flat `[mcp]`).
-//!    d. Execute via the configured [`ActionExecutor`]; trace
-//!       `action.executed`.
+//! 2. Dispatch to the topic handler (Rust closure or Lex function); collect
+//!    proposed actions.
+//! 3. For each action: trace `action.proposed`; if a gate is configured,
+//!    evaluate it and trace `gate.verdict` (Inconclusive is treated as Deny
+//!    by default); if the action is `CallMcp`, check
+//!    `Agent::allows_mcp_server` (per-server runtime allowlist; lex 0.2 ships
+//!    flat `[mcp]`); execute via the configured [`ActionExecutor`]; trace
+//!    `action.executed`.
 //!
 //! Trace records are flushed at [`Runner::finalize`].
 
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
 use serde_json::{json, Value};
 
 use crate::{
-    Action, A2aMessage, Agent, Error, Mailbox,
     executor::{ActionExecutor, MockExecutor},
     gate::{action_to_json, Gate, Verdict},
     lex_host::LexHost,
     trace::TraceWriter,
+    A2aMessage, Action, Agent, Error, Mailbox, MailboxSender,
 };
 
 fn now_ms() -> u64 {
@@ -56,11 +54,14 @@ fn bindings_to_json(b: &IndexMap<String, LexValue>) -> Value {
 /// fail to bind any quantifier and (typically) return Inconclusive.
 pub type BindingsFn = Box<dyn Fn(&Value, &Action) -> IndexMap<String, LexValue> + Send>;
 
+/// Native Rust topic handler. See [`Handler::Rust`].
+pub type RustHandlerFn = Box<dyn FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send>;
+
 /// One topic handler. Either a Rust closure or the name of a Lex function
 /// that the runner will invoke via its [`LexHost`].
 pub enum Handler {
     /// Native Rust closure. Mutates state directly; returns proposed actions.
-    Rust(Box<dyn FnMut(&mut Value, &A2aMessage) -> Vec<Action> + Send>),
+    Rust(RustHandlerFn),
     /// Name of a Lex function compiled into the runner's `LexHost`.
     /// The function is called with `(state, msg)` arguments and must
     /// return a list of action records (see [`Action::from_json`] for
@@ -97,6 +98,17 @@ impl Runner {
     pub fn from_lex_source(user_src: &str) -> Result<RunnerBuilder, Error> {
         let combined = format!("{}\n{}", crate::DSL_PREAMBLE, user_src);
         let host = LexHost::from_source(&combined)?;
+        Self::from_lex_host(host)
+    }
+
+    /// Like [`Self::from_lex_source`] but takes a pre-built [`LexHost`]
+    /// directly. Use this when you need to install a custom
+    /// `EffectHandler` factory on the host before the runner consumes it
+    /// (see [`LexHost::with_handler_factory`]).
+    ///
+    /// The caller is responsible for prepending [`crate::DSL_PREAMBLE`]
+    /// to the user source before compiling, if they want the DSL.
+    pub fn from_lex_host(host: LexHost) -> Result<RunnerBuilder, Error> {
         let result = host.call("config", Vec::new())?;
         let setup = crate::lex_dsl::parse_lex_config(&result.value)?;
         let mut builder = RunnerBuilder::default()
@@ -150,8 +162,7 @@ impl Runner {
                     let h_for_closure = spec_handle.clone();
                     let spec_started = now_ms();
                     let verdict = gate.evaluate_traced(&bindings, move || {
-                        Box::new(h_for_closure.clone())
-                            as Box<dyn lex_bytecode::vm::Tracer>
+                        Box::new(h_for_closure.clone()) as Box<dyn lex_bytecode::vm::Tracer>
                     });
                     let spec_ended = now_ms();
                     let spec_tree = spec_handle.finalize(
@@ -194,7 +205,8 @@ impl Runner {
 
             // Execute
             let outcome = self.executor.execute(action).map_err(|e| e.to_string());
-            self.trace.record_effect("action.executed", summary, outcome);
+            self.trace
+                .record_effect("action.executed", summary, outcome);
             allowed += 1;
         }
 
@@ -216,7 +228,11 @@ impl Runner {
                 }
             }
         }
-        Ok(DrainReport { messages, total_allowed, total_denied })
+        Ok(DrainReport {
+            messages,
+            total_allowed,
+            total_denied,
+        })
     }
 
     /// Persist the trace to `store` and return the run ID.
@@ -256,10 +272,6 @@ fn dispatch(
                 ))
             })?;
             let state_v = LexValue::from_json(state);
-            // Always pass a fixed-shape message record so Lex handlers
-            // can declare a stable signature. The original payload is
-            // serialised to a JSON string so handlers can choose whether
-            // to parse it.
             let msg_v = LexValue::from_json(&json!({
                 "from": msg.from,
                 "topic": msg.topic,
@@ -267,18 +279,44 @@ fn dispatch(
                     .unwrap_or_else(|_| "null".into()),
             }));
             let result = host.call(fn_name, vec![state_v, msg_v])?;
-            actions_from_lex_value(&result.value)
+            let (actions, new_state) = interpret_lex_result(&result.value)?;
+            if let Some(ns) = new_state {
+                *state = ns;
+            }
+            Ok(actions)
         }
     }
 }
 
-fn actions_from_lex_value(v: &LexValue) -> Result<Vec<Action>, Error> {
-    let LexValue::List(items) = v else {
-        return Err(Error::Spec(format!(
-            "Lex handler must return a List of action records, got {v:?}"
-        )));
-    };
-    items.iter().map(Action::from_lex_value).collect()
+/// Interpret a Lex handler's return value.
+///
+/// Two shapes are accepted:
+/// - **Stateless**: `List[ActionRecord]`. The handler proposed actions
+///   and didn't change state.
+/// - **Stateful**: `{ state: S, actions: List[ActionRecord] }`. The
+///   handler proposed actions *and* returned a replacement state record.
+///
+/// Stateful is detected by the result being a `Record` with both
+/// `state` and `actions` fields. Otherwise we expect a `List`.
+fn interpret_lex_result(v: &LexValue) -> Result<(Vec<Action>, Option<Value>), Error> {
+    let json = v.to_json();
+    if let Value::Object(map) = &json {
+        if let (Some(actions_v), Some(state_v)) = (map.get("actions"), map.get("state")) {
+            let actions = actions_from_json_array(actions_v)?;
+            return Ok((actions, Some(state_v.clone())));
+        }
+    }
+    let actions = actions_from_json_array(&json)?;
+    Ok((actions, None))
+}
+
+fn actions_from_json_array(v: &Value) -> Result<Vec<Action>, Error> {
+    let arr = v.as_array().ok_or_else(|| {
+        Error::Spec(format!(
+            "Lex handler return must be a list of action records (or {{state, actions}}), got: {v}"
+        ))
+    })?;
+    arr.iter().map(Action::from_json).collect()
 }
 
 #[derive(Debug)]
@@ -304,12 +342,32 @@ pub struct RunnerBuilder {
     gate: Option<Gate>,
     bindings_fn: Option<BindingsFn>,
     executor: Option<Box<dyn ActionExecutor>>,
+    ticks: Vec<TickSpec>,
+}
+
+/// One periodic tick configured on the runner. The tick thread sends a
+/// synthetic [`A2aMessage`] (`from = "self"`, payload = `null`) on the
+/// configured `topic` every `duration`. The thread exits when the
+/// mailbox is closed (i.e. the [`Runner`] is dropped).
+struct TickSpec {
+    duration: Duration,
+    topic: String,
+    sender: MailboxSender,
 }
 
 impl RunnerBuilder {
     pub fn agent(mut self, agent: Agent) -> Self {
         self.agent = Some(agent);
         self
+    }
+
+    /// Returns the agent's declared name once an agent has been set —
+    /// useful for callers that need to construct an executor or trace
+    /// writer keyed by the agent's identity *before* `.build()` consumes
+    /// the builder (e.g. `A2aRoutedExecutor::new(name, peers)` in
+    /// [`soft-runner`]).
+    pub fn agent_name(&self) -> Option<&str> {
+        self.agent.as_ref().map(|a| a.id().as_str())
     }
 
     pub fn state(mut self, state: Value) -> Self {
@@ -336,11 +394,7 @@ impl RunnerBuilder {
     /// must exist in the runner's [`LexHost`] (configured via
     /// [`Self::lex_host`]) and have the signature
     /// `fn(state, msg) -> List[ActionRecord]`.
-    pub fn handle_lex(
-        mut self,
-        topic: impl Into<String>,
-        fn_name: impl Into<String>,
-    ) -> Self {
+    pub fn handle_lex(mut self, topic: impl Into<String>, fn_name: impl Into<String>) -> Self {
         self.handlers
             .insert(topic.into(), Handler::Lex(fn_name.into()));
         self
@@ -367,6 +421,28 @@ impl RunnerBuilder {
         self
     }
 
+    /// Register a periodic self-tick. Every `duration`, the runner's
+    /// mailbox receives an [`A2aMessage`] with `from = "self"`, the given
+    /// `topic`, and a `null` payload. Useful for self-initiated agents
+    /// (heartbeats, periodic broadcasts, scheduled dispatch).
+    ///
+    /// The `sender` must be a clone of the same `MailboxSender` returned
+    /// by [`Mailbox::new`] for this runner. The tick thread exits when
+    /// the mailbox is closed (i.e. the [`Runner`] is dropped).
+    pub fn tick(
+        mut self,
+        duration: Duration,
+        topic: impl Into<String>,
+        sender: MailboxSender,
+    ) -> Self {
+        self.ticks.push(TickSpec {
+            duration,
+            topic: topic.into(),
+            sender,
+        });
+        self
+    }
+
     pub fn build(self) -> Result<Runner, Error> {
         let agent = self
             .agent
@@ -384,7 +460,9 @@ impl RunnerBuilder {
             ));
         }
 
-        let executor = self.executor.unwrap_or_else(|| Box::new(MockExecutor::new()));
+        let executor = self
+            .executor
+            .unwrap_or_else(|| Box::new(MockExecutor::new()));
         let bindings_fn = self
             .bindings_fn
             .unwrap_or_else(|| Box::new(|_, _| IndexMap::new()));
@@ -393,6 +471,24 @@ impl RunnerBuilder {
             agent.id().as_str().to_string(),
             state.clone(),
         );
+
+        // Spawn one detached thread per tick. They exit when the mailbox
+        // is closed (mpsc::Sender::send returns Err once the receiver is
+        // dropped).
+        for spec in self.ticks {
+            std::thread::spawn(move || loop {
+                std::thread::sleep(spec.duration);
+                let msg = A2aMessage {
+                    from: "self".to_string(),
+                    topic: spec.topic.clone(),
+                    payload: Value::Null,
+                };
+                if spec.sender.send(msg).is_err() {
+                    break;
+                }
+            });
+        }
+
         Ok(Runner {
             agent,
             state,
