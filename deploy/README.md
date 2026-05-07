@@ -75,14 +75,15 @@ run_id...         proposed  allowed  denied  inconclusive  executed  skipped
 <...>                   2        0       0             0         2        0   ← VIOLATION: executed > allowed
 ```
 
-> **Note on the "violations".** `soft-replay`'s `has_violation` predicate is
-> `executed > allowed`, which is conservative: an *ungated* run (one with no
-> `gate.verdict` events) gets flagged because every executed action lacks a
-> corresponding `Allow` verdict. The deploy agents in `agents/*.lex` don't
-> currently configure spec gates (the gate path is wired in our test
-> harness, not in `agents/`). Treat the flag as informational here — it
-> means "you ran without a gate," not "an action bypassed Deny." Wiring a
-> real gate into agents/depot.lex would be a follow-up.
+> **Note on the remaining "violation".** `soft-replay`'s `has_violation`
+> predicate is `executed > allowed`, which is conservative: an *ungated* run
+> (one with no `gate.verdict` events) gets flagged because every executed
+> action lacks a corresponding `Allow` verdict. The vehicle and depot agents
+> now ship spec gates (`agents/vehicle.spec`, `agents/depot.spec`); the pv
+> agent has no meaningful invariant to encode (it just emits ticks) and so
+> still trips the flag. Treat the remaining flag as "you ran an ungated
+> agent," not "an action bypassed Deny." Improving `soft-replay` to skip
+> ungated runs would close the false positive entirely.
 
 ## Running by hand
 

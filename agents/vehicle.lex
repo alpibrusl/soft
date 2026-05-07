@@ -11,6 +11,7 @@ fn config() -> AgentConfig {
   agent_new("vehicle")
   |> agent_peers(["depot", "depot2", "tms"])
   |> agent_effects(["a2a"])
+  |> agent_specs(["vehicle.spec"])
   |> agent_handles([
        { topic: "Dispatch",     fn_name: "on_dispatch" },
        { topic: "GrantSession", fn_name: "on_grant" },
