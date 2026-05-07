@@ -37,3 +37,42 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+  docker:
+    name: docker · build · compose-validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Catches Dockerfile drift early: if someone reshuffles the
+      # workspace or renames a binary, the multi-stage build breaks
+      # here instead of in someone's hand-run `docker compose up`.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: soft:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Validates compose-file syntax + service references without
+      # spinning anything up — keeps CI fast.
+      - name: Validate docker-compose.yml
+        run: docker compose -f docker-compose.yml config > /dev/null
+
+      # Verifies the multi-stage runtime image contains all three
+      # binaries the Dockerfile claims to copy.
+      - name: Verify shipped binaries
+        run: |
+          docker run --rm --entrypoint /bin/sh soft:ci -c '
+            set -e
+            test -x /usr/local/bin/soft-run
+            test -x /usr/local/bin/soft-replay
+            test -x /usr/local/bin/soft-trace-viewer
+          '
