@@ -9,6 +9,7 @@ fn config() -> AgentConfig {
   agent_new("depot")
   |> agent_peers(["vehicle", "pv"])
   |> agent_effects(["a2a"])
+  |> agent_specs(["depot.spec"])
   |> agent_handles([
        { topic: "RequestSession", fn_name: "on_request_session" },
        { topic: "PvUpdate",       fn_name: "on_pv_update" },

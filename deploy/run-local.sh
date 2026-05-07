@@ -62,7 +62,7 @@ depot_pid=$!
   --peer depot2=http://127.0.0.1:8002 \
   --peer tms=http://127.0.0.1:8003 \
   --store "$STORE_DIR" \
-  --state-json '{"soc":0.30,"reserve":0.20,"energy_needed":0.30,"tried":0}' \
+  --state-json '{"soc":0.85,"reserve":0.20,"energy_needed":0.30,"tried":0}' \
   > "$LOG_DIR/vehicle.log" 2>&1 &
 vehicle_pid=$!
 
@@ -84,6 +84,17 @@ curl -sf -X POST http://127.0.0.1:8001/a2a/messages \
     "role":"user",
     "parts":[{"kind":"data","data":{"delivery_id":"d-1"}}],
     "metadata":{"from":"tester","topic":"Dispatch"}
+  }'
+echo
+
+echo "=== sending RequestSession to depot (exercises grid_budget gate) ==="
+curl -sf -X POST http://127.0.0.1:8002/a2a/messages \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "message_id":"m-2",
+    "role":"user",
+    "parts":[{"kind":"data","data":{"vehicle_id":"v-1","power_kw":50}}],
+    "metadata":{"from":"vehicle","topic":"RequestSession"}
   }'
 echo
 sleep 3

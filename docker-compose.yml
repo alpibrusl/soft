@@ -31,7 +31,7 @@ services:
       - --peer=depot=http://depot:8002
       - --peer=depot2=http://depot:8002
       - --peer=tms=http://tms:8003
-      - --state-json={"soc":0.30,"reserve":0.20,"energy_needed":0.30,"tried":0}
+      - --state-json={"soc":0.85,"reserve":0.20,"energy_needed":0.30,"tried":0}
     environment:
       SOFT_SHUTDOWN_TOKEN: ${SOFT_SHUTDOWN_TOKEN:-localdev}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

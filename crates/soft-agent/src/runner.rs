@@ -419,6 +419,18 @@ impl RunnerBuilder {
         self.agent.as_ref().map(|a| a.id().as_str())
     }
 
+    /// The agent's declared `spec_paths` from `agent_specs([...])` in
+    /// the lex DSL. Empty until [`Self::agent`] has been set (or until
+    /// the builder has been seeded by [`Runner::from_lex_host`]).
+    /// soft-runner reads this after compile to decide whether to load
+    /// `.spec` files and install a [`Gate`].
+    pub fn spec_paths(&self) -> &[String] {
+        match &self.agent {
+            Some(a) => a.spec_paths(),
+            None => &[],
+        }
+    }
+
     pub fn state(mut self, state: Value) -> Self {
         self.state = Some(state);
         self

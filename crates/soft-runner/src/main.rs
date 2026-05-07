@@ -32,10 +32,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use indexmap::IndexMap;
+use lex_bytecode::Value as LexValue;
 use lex_runtime::Policy;
 use serde_json::Value;
 use soft_a2a::{A2aRoutedExecutor, A2aServer, AgentCard};
-use soft_agent::{LexHost, Mailbox, Metrics, Runner, StepReport, DSL_PREAMBLE};
+use soft_agent::{Action, Gate, LexHost, Mailbox, Metrics, Runner, StepReport, DSL_PREAMBLE};
 
 use crate::anthropic::AnthropicCloudHandler;
 
@@ -248,6 +250,45 @@ fn main() -> ExitCode {
         .expect("from_lex_host sets agent")
         .to_string();
 
+    // Optional: build a spec gate from `agent_specs([...])` paths in
+    // the lex source. Paths are resolved relative to the agent.lex
+    // file's directory so users write `agent_specs(["depot.spec"])`
+    // rather than absolute paths.
+    let spec_paths: Vec<String> = builder.spec_paths().to_vec();
+    let agent_dir: PathBuf = match PathBuf::from(&args.agent_file).parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    if !spec_paths.is_empty() {
+        let mut sources: Vec<String> = Vec::with_capacity(spec_paths.len());
+        for rel in &spec_paths {
+            let full = agent_dir.join(rel);
+            match std::fs::read_to_string(&full) {
+                Ok(s) => sources.push(s),
+                Err(e) => {
+                    eprintln!("read spec {}: {e}", full.display());
+                    return ExitCode::from(2);
+                }
+            }
+        }
+        let src_refs: Vec<&str> = sources.iter().map(String::as_str).collect();
+        let gate = match Gate::from_sources(&src_refs, "fn _host() -> Int { 0 }") {
+            Ok(g) => g,
+            Err(e) => {
+                eprintln!("compile gate for `{agent_name}`: {e}");
+                return ExitCode::from(1);
+            }
+        };
+        eprintln!(
+            "[{agent_name}] gate active: {} spec(s) from {}",
+            gate.spec_count(),
+            spec_paths.join(", ")
+        );
+        builder = builder
+            .gate(gate)
+            .bindings_fn(Box::new(state_float_bindings));
+    }
+
     let metrics = Arc::new(Metrics::new(&agent_name));
     let (mailbox, sender) = Mailbox::new();
     builder = builder
@@ -392,4 +433,24 @@ fn format_ticks(ticks: &[(String, Duration)]) -> String {
     }
     let parts: Vec<String> = ticks.iter().map(|(t, d)| format!("{t}@{:?}", d)).collect();
     format!("  ticks=[{}]", parts.join(", "))
+}
+
+/// Default `BindingsFn` for soft-run: copy every top-level `Number`
+/// field of the agent's state into the spec gate's quantifier bindings
+/// under the same name, as `LexValue::Float`. This mirrors how
+/// `agents/*.spec` files quantify over state field names.
+///
+/// Action-derived bindings aren't included — the deploy specs only
+/// reason about state. If a future spec needs `delta_kw` from a
+/// SendA2a payload, extend this function (or specialize per-agent).
+fn state_float_bindings(state: &Value, _action: &Action) -> IndexMap<String, LexValue> {
+    let mut out = IndexMap::new();
+    if let Some(obj) = state.as_object() {
+        for (k, v) in obj {
+            if let Some(f) = v.as_f64() {
+                out.insert(k.clone(), LexValue::Float(f));
+            }
+        }
+    }
+    out
 }
