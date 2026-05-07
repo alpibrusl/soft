@@ -4,6 +4,7 @@ members = [
     "crates/soft-agent",
     "crates/soft-a2a",
     "crates/soft-runner",
+    "crates/soft-trace-viewer",
 ]
 
 [workspace.package]

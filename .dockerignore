@@ -1,0 +1,10 @@
+target/
+.git/
+.github/
+.idea/
+.vscode/
+*.log
+*.swp
+deploy/traces/
+docs/
+README.md

@@ -1,0 +1,24 @@
+[package]
+name = "soft-trace-viewer"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Tiny HTTP server that browses lex-store traces and renders the call/effect tree as collapsible HTML."
+publish = false
+
+[[bin]]
+name = "soft-trace-viewer"
+path = "src/main.rs"
+
+[dependencies]
+lex-store  = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+tiny_http  = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+ureq     = { workspace = true }

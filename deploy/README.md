@@ -2,7 +2,37 @@
 
 Each agent runs in its own OS process. Inter-agent communication is real
 HTTP A2A — exactly the same wire format as cross-host deployment, just
-all four processes happen to be on `127.0.0.1`.
+all four processes happen to be on `127.0.0.1` (or, with compose, on
+service-name DNS inside a container network).
+
+## Docker Compose (recommended for cross-host realism)
+
+```bash
+docker compose up --build
+```
+
+Brings up vehicle / depot / tms / pv plus a `trace-viewer` companion.
+Peers resolve via service-name DNS (`http://depot:8002` etc.). Each
+service has a `/healthz` healthcheck and a 5s graceful-shutdown grace
+period, so `docker compose down` flushes traces correctly via
+`POST /shutdown` (the runner picks up SIGTERM where the platform
+delivers it; the orchestrator sends `/shutdown` as a fallback).
+
+| Service | Host port | Notes |
+|---|---|---|
+| `vehicle`       | 8001 | A2A + `/healthz` + `/metrics` |
+| `depot`         | 8002 | same |
+| `tms`           | 8003 | same |
+| `pv`            | 8004 | same; ticks `2s` |
+| `trace-viewer`  | 8080 | HTML browser for the shared `/traces` volume |
+
+`SOFT_SHUTDOWN_TOKEN` defaults to `localdev` — change it when binding
+non-loopback. `ANTHROPIC_API_KEY` is forwarded through if set in your
+shell env.
+
+```bash
+docker compose down --timeout 5    # graceful, traces flush
+```
 
 The four processes:
 
@@ -153,6 +183,49 @@ Callers must then send `X-Shutdown-Token: <T>`:
 ```bash
 curl -X POST -H "X-Shutdown-Token: $TOKEN" http://host:port/shutdown
 ```
+
+## Observability
+
+Every `soft-run` exposes two extra routes alongside its A2A endpoints:
+
+- **`GET /healthz`** — `{"ok": true}`. Cheap liveness check; used by
+  the compose healthchecks. Doesn't depend on the mailbox or executor.
+- **`GET /metrics`** — Prometheus text exposition format. Counters:
+  - `soft_messages_received_total{topic}`
+  - `soft_actions_proposed_total{kind}`
+  - `soft_actions_allowed_total{kind}` (passed gate + executor accepted)
+  - `soft_actions_denied_total{kind, reason}` (`reason` ∈ `gate`, `mcp_allowlist`)
+  - `soft_gate_verdict_total{verdict}` (`Allow`, `Deny`, `Inconclusive`)
+  - `soft_tick_fires_total{topic}`
+  - `soft_steps_total{outcome}` (`Idle`, `Processed`, `Error`)
+
+Wire a Prometheus scraper at `http://<host>:<port>/metrics`. The agent
+name appears as a single `# HELP soft_agent <name>` comment so you can
+disambiguate scrapes when service-discovery doesn't already label them.
+
+## Trace viewer (`soft-trace-viewer`)
+
+A small standalone binary that serves the persisted `lex-store` traces
+as an interactive HTML page.
+
+```bash
+cargo run -p soft-trace-viewer -- --store /tmp/soft-store --bind 127.0.0.1:8080
+# open http://127.0.0.1:8080/
+```
+
+In compose it runs alongside the agents on port `8080`, mounted on the
+shared `traces` volume — clicking a run-id in the sidebar loads the
+full call/effect tree for that agent's run, with collapsible sections
+per `Call` / `Effect` node and JSON-pretty-printed args/results. No JS
+framework, ~200 lines of vanilla.
+
+API surface (used by the embedded HTML):
+
+| Method | Path | Body |
+|---|---|---|
+| GET | `/`               | `index.html` |
+| GET | `/api/traces`     | `{"traces": ["<run-id>", ...]}` |
+| GET | `/api/trace/<id>` | full `TraceTree` JSON |
 
 ## Driving an LLM-backed handler
 

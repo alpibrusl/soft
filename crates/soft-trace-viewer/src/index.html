@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>soft trace viewer</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --fg: #e6edf3;
+    --muted: #9aa4b1;
+    --accent: #58a6ff;
+    --ok: #3fb950;
+    --err: #f85149;
+    --border: #30363d;
+    --panel: #161b22;
+  }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--fg); }
+  header { padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--panel);
+           display: flex; align-items: baseline; gap: 12px; }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 38px); }
+  #sidebar { border-right: 1px solid var(--border); overflow-y: auto; padding: 8px 0;
+             background: var(--panel); }
+  #sidebar .trace { padding: 6px 16px; cursor: pointer; font-family: monospace; font-size: 12px;
+                    color: var(--muted); border-left: 2px solid transparent; }
+  #sidebar .trace:hover { color: var(--fg); background: rgba(88, 166, 255, 0.05); }
+  #sidebar .trace.active { color: var(--accent); border-left-color: var(--accent);
+                           background: rgba(88, 166, 255, 0.08); }
+  #content { overflow-y: auto; padding: 16px 24px; }
+  .placeholder { color: var(--muted); font-style: italic; }
+  .node { margin: 4px 0; }
+  details { border-left: 2px solid var(--border); padding-left: 8px; margin-left: 4px; }
+  details > summary { cursor: pointer; list-style: none; padding: 2px 0; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▶"; color: var(--muted); margin-right: 6px;
+                              display: inline-block; transition: transform 0.1s; font-size: 10px; }
+  details[open] > summary::before { transform: rotate(90deg); }
+  .kind { font-family: monospace; font-size: 11px; padding: 1px 5px; border-radius: 3px;
+          background: rgba(88, 166, 255, 0.15); color: var(--accent); margin-right: 6px;
+          text-transform: uppercase; letter-spacing: 0.3px; }
+  .kind.effect { background: rgba(63, 185, 80, 0.15); color: var(--ok); }
+  .kind.error  { background: rgba(248, 81, 73, 0.15); color: var(--err); }
+  .name { font-weight: 600; }
+  .duration { color: var(--muted); font-size: 12px; margin-left: 8px; }
+  .args, .result { font-family: monospace; font-size: 12px; color: var(--muted);
+                   white-space: pre-wrap; margin: 4px 0 4px 24px; max-width: 900px;
+                   word-break: break-all; }
+  .args::before  { content: "args: "; color: #6e7681; }
+  .result::before{ content: "result: "; color: #6e7681; }
+  .result.err { color: var(--err); }
+</style>
+</head>
+<body>
+<header>
+  <h1>soft trace viewer</h1>
+  <span class="meta">click a run id to load its trace</span>
+</header>
+<main>
+  <div id="sidebar"><div class="placeholder" style="padding: 0 16px;">loading…</div></div>
+  <div id="content"><div class="placeholder">Select a trace from the sidebar.</div></div>
+</main>
+<script>
+async function loadTraces() {
+  const sb = document.getElementById('sidebar');
+  try {
+    const res = await fetch('/api/traces');
+    const data = await res.json();
+    if (!data.traces.length) {
+      sb.innerHTML = '<div class="placeholder" style="padding: 0 16px;">no traces yet</div>';
+      return;
+    }
+    sb.innerHTML = '';
+    data.traces.forEach(id => {
+      const el = document.createElement('div');
+      el.className = 'trace';
+      el.textContent = id.slice(0, 16) + (id.length > 16 ? '…' : '');
+      el.title = id;
+      el.onclick = () => selectTrace(id, el);
+      sb.appendChild(el);
+    });
+  } catch (e) {
+    sb.innerHTML = '<div class="placeholder" style="padding: 0 16px; color: var(--err);">'
+                 + 'failed to load: ' + e + '</div>';
+  }
+}
+
+async function selectTrace(id, el) {
+  document.querySelectorAll('#sidebar .trace.active').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="placeholder">loading…</div>';
+  try {
+    const res = await fetch('/api/trace/' + encodeURIComponent(id));
+    if (!res.ok) {
+      c.innerHTML = '<div class="placeholder" style="color: var(--err);">'
+                  + (await res.text()) + '</div>';
+      return;
+    }
+    const tree = await res.json();
+    c.innerHTML = '';
+    renderTree(tree, c);
+  } catch (e) {
+    c.innerHTML = '<div class="placeholder" style="color: var(--err);">' + e + '</div>';
+  }
+}
+
+function renderTree(tree, parent) {
+  const root = document.createElement('div');
+  root.className = 'node';
+  const meta = document.createElement('div');
+  meta.innerHTML = '<span class="kind">trace</span><span class="name">'
+                 + escapeHtml(tree.run_id || tree.label || '(root)') + '</span>'
+                 + '<span class="duration">'
+                 + (tree.nodes ? tree.nodes.length : 0) + ' node(s)</span>';
+  root.appendChild(meta);
+  parent.appendChild(root);
+
+  (tree.nodes || []).forEach(n => renderNode(n, root));
+}
+
+function renderNode(node, parent) {
+  // TraceNode shape (lex_trace::TraceNode):
+  //   { kind: "Call" | "Effect" | "Result", name, args, result, started_ms, ended_ms,
+  //     children: [TraceNode, ...] }
+  // Or, in the soft-agent TraceWriter shape, "kind" may be one of
+  //   "a2a.received" | "action.proposed" | "gate.verdict" | "action.executed" | "action.skipped"
+  const det = document.createElement('details');
+  det.open = true;
+  const sum = document.createElement('summary');
+
+  const kindClass = node.outcome && node.outcome.Err !== undefined ? 'kind error'
+                  : (node.kind && node.kind.indexOf('action.') === 0 ? 'kind effect' : 'kind');
+  const kind = node.kind || node.event || 'node';
+  const name = node.name || node.label || '';
+
+  sum.innerHTML = '<span class="' + kindClass + '">' + escapeHtml(String(kind)) + '</span>'
+                + '<span class="name">' + escapeHtml(String(name)) + '</span>'
+                + (node.started_ms && node.ended_ms
+                    ? '<span class="duration">' + (node.ended_ms - node.started_ms) + ' ms</span>'
+                    : '');
+  det.appendChild(sum);
+
+  if (node.args !== undefined && node.args !== null) {
+    const a = document.createElement('div');
+    a.className = 'args';
+    a.textContent = JSON.stringify(node.args, null, 2);
+    det.appendChild(a);
+  }
+  const resultObj = node.outcome || node.result;
+  if (resultObj !== undefined && resultObj !== null) {
+    const r = document.createElement('div');
+    r.className = 'result' + (resultObj.Err !== undefined ? ' err' : '');
+    r.textContent = JSON.stringify(resultObj, null, 2);
+    det.appendChild(r);
+  }
+  (node.children || []).forEach(c => renderNode(c, det));
+  parent.appendChild(det);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+loadTraces();
+</script>
+</body>
+</html>
