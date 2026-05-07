@@ -49,13 +49,23 @@ declarations in user-supplied `.lex` agent files.
 
 The lex-lang surface that soft-agent consumes is unchanged:
 
-- `lex_bytecode::Vm::with_handler`, `vm.call`, `vm.set_tracer`
-- `lex_runtime::DefaultHandler::new`, `Policy::permissive`
-- `lex_bytecode::Program`, `compile_program`, `Value`
-- `lex_bytecode::Value::to_json` (shape unchanged for everything except the
-  closure debug string, which `soft-agent` doesn't introspect)
-- `lex_types::check_program`
-- `lex_trace::Recorder`
+- `lex_syntax::parse_source` (`lex_host.rs`, `gate.rs`)
+- `lex_ast::canonicalize_program` (`lex_host.rs`, `gate.rs`)
+- `lex_types::check_program` (`lex_host.rs`, `gate.rs`)
+- `lex_bytecode::compile_program`, `Program`, `Value`, `Value::to_json` /
+  `Value::from_json` (shape unchanged for everything except the closure
+  debug string, which `soft-agent` doesn't introspect)
+- `lex_bytecode::vm::{Vm, EffectHandler}` — `Vm::with_handler`, `vm.call`,
+  `vm.set_tracer`
+- `lex_runtime::{DefaultHandler, Policy}` — `DefaultHandler::new`,
+  `Policy::permissive`
+- `lex_trace::{Recorder, Handle, RunId, TraceTree, TraceNode, TraceNodeKind}`
+  (the recorder, the `Tracer` impl on `Handle`, and the tree/node types
+  consumed by `TraceWriter` and `replay::scan_trace`)
+- `lex_store::Store::{open, save_trace, load_trace, list_traces}`
+  (`trace.rs`, `bin/soft_replay.rs`)
+- `spec_checker::{evaluate_gate_compiled, evaluate_gate_compiled_traced,
+  parse_spec, Spec, GateVerdict}` (`gate.rs`)
 
 ### Mandatory: workspace bump
 
@@ -176,9 +186,13 @@ Three language-track items still open on the meta tracker (#220):
 
 - #208 — spec-checker quantification over records / lists / ADTs.
   This is the one that eliminates `soft-agent`'s `BindingsFn`
-  flattening hack. Once it lands, the `BindingsFn` plumbing in
-  `soft-agent/src/gate.rs` (if any — it's referenced in #208's
-  background but I haven't located it yet) can be simplified.
+  flattening hack. The plumbing lives in
+  `crates/soft-agent/src/runner.rs:57` (the `BindingsFn` type alias),
+  with the per-action call site in `Runner::dispatch` and the builder
+  hook at `RunnerBuilder::bindings_fn`. Once #208 lands, the closure
+  can be replaced by passing the action record straight through to
+  `evaluate_gate_compiled_traced` and letting the spec body destructure
+  it.
 - #209 — refinement types on function signatures (depends on #208).
 - #206 — canonical AST as primary compilation surface (largest lift).
 
