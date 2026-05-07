@@ -28,7 +28,7 @@ fn on_request_session(
     [{
       kind: "send_a2a", server: "", tool: "", args_json: "",
       peer: msg.from, a2a_topic: "GrantSession",
-      payload_json: "{\"charger_id\":\"c-1\"}", prompt: "",
+      payload_json: "{\"charger_id\":\"c-1\",\"power_kw\":50}", prompt: "",
     }]
   } else {
     [{
