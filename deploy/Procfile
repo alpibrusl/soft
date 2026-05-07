@@ -9,7 +9,7 @@
 # Each line: <name>: <command>. The runners themselves are stateless —
 # state is supplied via --state-json and persists only in the trace.
 
-tms:     ./target/debug/soft-run agents/tms.lex     --port 8003 --state-json '{"running":true}'
-depot:   ./target/debug/soft-run agents/depot.lex   --port 8002 --peer vehicle=http://127.0.0.1:8001 --state-json '{"current_kw":30,"budget_kw":100,"pv_kw":0,"requested_kw":50}'
-vehicle: ./target/debug/soft-run agents/vehicle.lex --port 8001 --peer depot=http://127.0.0.1:8002 --peer depot2=http://127.0.0.1:8002 --peer tms=http://127.0.0.1:8003 --state-json '{"soc":0.30,"reserve":0.20,"energy_needed":0.30,"tried":0}'
-pv:      ./target/debug/soft-run agents/pv.lex      --port 8004 --peer depot=http://127.0.0.1:8002 --tick Tick=2s --state-json '{"pv_kw":25}'
+tms:     ./target/debug/soft-run agents/tms.lex     --port 8003 --store /tmp/soft-store --state-json '{"running":true}'
+depot:   ./target/debug/soft-run agents/depot.lex   --port 8002 --store /tmp/soft-store --peer vehicle=http://127.0.0.1:8001 --state-json '{"current_kw":30.0,"budget_kw":100.0,"pv_kw":0.0,"requested_kw":50.0}'
+vehicle: ./target/debug/soft-run agents/vehicle.lex --port 8001 --store /tmp/soft-store --peer depot=http://127.0.0.1:8002 --peer depot2=http://127.0.0.1:8002 --peer tms=http://127.0.0.1:8003 --state-json '{"soc":0.30,"reserve":0.20,"energy_needed":0.30,"tried":0}'
+pv:      ./target/debug/soft-run agents/pv.lex      --port 8004 --store /tmp/soft-store --peer depot=http://127.0.0.1:8002 --tick Tick=2s --state-json '{"pv_kw":25.0}'

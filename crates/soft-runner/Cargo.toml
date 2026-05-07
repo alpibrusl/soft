@@ -14,6 +14,12 @@ name = "soft-run"
 path = "src/main.rs"
 
 [dependencies]
-soft-agent = { path = "../soft-agent" }
-soft-a2a   = { path = "../soft-a2a" }
-serde_json = { workspace = true }
+soft-agent   = { path = "../soft-agent" }
+soft-a2a     = { path = "../soft-a2a" }
+lex-bytecode = { workspace = true }   # EffectHandler trait + Value
+lex-runtime  = { workspace = true }   # DefaultHandler we wrap
+lex-store    = { workspace = true }   # for --store / finalize on shutdown
+lex-trace    = { workspace = true }
+serde_json   = { workspace = true }
+ureq         = { workspace = true }   # Anthropic Messages API
+ctrlc        = { version = "3", features = ["termination"] }   # SIGTERM + SIGINT

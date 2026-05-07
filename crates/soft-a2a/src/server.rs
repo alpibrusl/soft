@@ -12,6 +12,8 @@
 //! mandatory — they tell soft-agent who sent the message and which topic
 //! handler to dispatch into.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use serde_json::json;
@@ -25,6 +27,7 @@ pub struct A2aServer {
     server: Server,
     agent_card: AgentCard,
     sender: MailboxSender,
+    shutdown: Option<Arc<AtomicBool>>,
 }
 
 impl A2aServer {
@@ -35,7 +38,16 @@ impl A2aServer {
         sender: MailboxSender,
     ) -> Result<Self, Error> {
         let server = Server::http(addr).map_err(|e| Error::Bind(e.to_string()))?;
-        Ok(A2aServer { server, agent_card, sender })
+        Ok(A2aServer { server, agent_card, sender, shutdown: None })
+    }
+
+    /// Wire a shared shutdown flag. When set, a `POST /shutdown` request
+    /// flips the flag to `true` — the runner can poll it for graceful
+    /// teardown. Useful when signal handling is unreliable (sandboxes,
+    /// orchestrators that intercept SIGTERM upstream).
+    pub fn with_shutdown_flag(mut self, flag: Arc<AtomicBool>) -> Self {
+        self.shutdown = Some(flag);
+        self
     }
 
     /// The local socket address the server is listening on.
@@ -46,9 +58,9 @@ impl A2aServer {
     /// Run the server loop in this thread. Blocks until the underlying
     /// listener is dropped.
     pub fn run(self) {
-        let A2aServer { server, agent_card, sender } = self;
+        let A2aServer { server, agent_card, sender, shutdown } = self;
         for req in server.incoming_requests() {
-            handle(req, &agent_card, &sender);
+            handle(req, &agent_card, &sender, shutdown.as_ref());
         }
     }
 
@@ -58,10 +70,22 @@ impl A2aServer {
     }
 }
 
-fn handle(req: Request, card: &AgentCard, sender: &MailboxSender) {
+fn handle(
+    req: Request,
+    card: &AgentCard,
+    sender: &MailboxSender,
+    shutdown: Option<&Arc<AtomicBool>>,
+) {
     match (req.method(), req.url()) {
         (Method::Get, "/a2a/agent-card") => respond_json(req, card, 200),
         (Method::Post, "/a2a/messages") => handle_message(req, sender),
+        (Method::Post, "/shutdown") => match shutdown {
+            Some(flag) => {
+                flag.store(true, Ordering::SeqCst);
+                respond_json(req, &json!({"shutdown": "requested"}), 202);
+            }
+            None => respond_text(req, "shutdown endpoint not configured", 404),
+        },
         _ => respond_text(req, "not found", 404),
     }
 }

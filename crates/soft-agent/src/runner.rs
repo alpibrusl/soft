@@ -97,6 +97,17 @@ impl Runner {
     pub fn from_lex_source(user_src: &str) -> Result<RunnerBuilder, Error> {
         let combined = format!("{}\n{}", crate::DSL_PREAMBLE, user_src);
         let host = LexHost::from_source(&combined)?;
+        Self::from_lex_host(host)
+    }
+
+    /// Like [`Self::from_lex_source`] but takes a pre-built [`LexHost`]
+    /// directly. Use this when you need to install a custom
+    /// `EffectHandler` factory on the host before the runner consumes it
+    /// (see [`LexHost::with_handler_factory`]).
+    ///
+    /// The caller is responsible for prepending [`crate::DSL_PREAMBLE`]
+    /// to the user source before compiling, if they want the DSL.
+    pub fn from_lex_host(host: LexHost) -> Result<RunnerBuilder, Error> {
         let result = host.call("config", Vec::new())?;
         let setup = crate::lex_dsl::parse_lex_config(&result.value)?;
         let mut builder = RunnerBuilder::default()
