@@ -30,7 +30,7 @@ WORKDIR /soft
 
 # Bring the built binaries.
 COPY --from=builder /soft/target/release/soft-run             /usr/local/bin/soft-run
-COPY --from=builder /soft/target/release/soft_replay          /usr/local/bin/soft-replay
+COPY --from=builder /soft/target/release/soft-replay          /usr/local/bin/soft-replay
 COPY --from=builder /soft/target/release/soft-trace-viewer    /usr/local/bin/soft-trace-viewer
 
 # Default agents directory; compose mounts a volume for traces.
