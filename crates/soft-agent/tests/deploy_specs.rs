@@ -2,7 +2,7 @@
 //!
 //! Loads `agents/depot.lex` + `agents/depot.spec` straight from the
 //! repo (and `agents/vehicle.lex` + `agents/vehicle.spec`), wires up
-//! `default_float_bindings` (the `BindingsFn` that `soft-runner`
+//! `record_bindings` (the `BindingsFn` that `soft-runner`
 //! installs), and asserts:
 //!
 //!   - the depot grants when (current + power_kw) ≤ (budget + pv);
@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
 use serde_json::json;
-use soft_agent::{default_float_bindings, A2aMessage, Gate, Mailbox, Runner, StepReport, Verdict};
+use soft_agent::{record_bindings, A2aMessage, Gate, Mailbox, Runner, StepReport, Verdict};
 
 fn agents_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -78,7 +78,7 @@ fn depot_grants_when_within_budget() {
             "requested_kw": 50.0,
         }))
         .gate(gate)
-        .bindings_fn(Box::new(default_float_bindings))
+        .bindings_fn(Box::new(record_bindings))
         .build()
         .expect("runner builds");
 
@@ -116,7 +116,7 @@ fn depot_denies_when_over_budget() {
             "requested_kw": 50.0,
         }))
         .gate(gate)
-        .bindings_fn(Box::new(default_float_bindings))
+        .bindings_fn(Box::new(record_bindings))
         .build()
         .expect("runner builds");
 
@@ -157,7 +157,7 @@ fn vehicle_dispatch_allowed_when_above_reserve() {
             "tried": 0,
         }))
         .gate(gate)
-        .bindings_fn(Box::new(default_float_bindings))
+        .bindings_fn(Box::new(record_bindings))
         .build()
         .expect("runner builds");
 
@@ -198,7 +198,7 @@ fn vehicle_dispatch_denied_when_below_reserve() {
             "tried": 0,
         }))
         .gate(gate)
-        .bindings_fn(Box::new(default_float_bindings))
+        .bindings_fn(Box::new(record_bindings))
         .build()
         .expect("runner builds");
 
@@ -223,33 +223,45 @@ fn vehicle_dispatch_denied_when_below_reserve() {
 }
 
 #[test]
-fn depot_spec_evaluates_directly() {
-    // Sanity: the spec body compiles and the bindings the runner
-    // would build evaluate to the expected verdicts. `power_kw` is
-    // populated from the action's payload at gate time; here we plug
-    // it in manually.
+fn depot_spec_evaluates_directly_with_record_bindings() {
+    // Sanity: the on-disk depot.spec compiles and accepts record-shaped
+    // `s` and `a` bindings of the kind `record_bindings` produces. Unit-
+    // level proof that the lex-lang 0.3 record-quantifier path works
+    // against our actual deploy-fleet spec.
     let spec_src = read_spec("depot");
     let gate = Gate::from_sources(&[&spec_src], "fn _host() -> Int { 0 }").unwrap();
 
-    let mut allow_b = IndexMap::new();
-    allow_b.insert("current_kw".into(), LexValue::Float(30.0));
-    allow_b.insert("power_kw".into(), LexValue::Float(50.0));
-    allow_b.insert("budget_kw".into(), LexValue::Float(100.0));
-    allow_b.insert("pv_kw".into(), LexValue::Float(0.0));
+    let allow_b = build_depot_record_bindings(30.0, 100.0, 0.0, 50.0);
     assert!(matches!(gate.evaluate(&allow_b), Verdict::Allow));
 
-    let mut deny_b = IndexMap::new();
-    deny_b.insert("current_kw".into(), LexValue::Float(80.0));
-    deny_b.insert("power_kw".into(), LexValue::Float(50.0));
-    deny_b.insert("budget_kw".into(), LexValue::Float(100.0));
-    deny_b.insert("pv_kw".into(), LexValue::Float(0.0));
+    let deny_b = build_depot_record_bindings(80.0, 100.0, 0.0, 50.0);
     assert!(matches!(gate.evaluate(&deny_b), Verdict::Deny { .. }));
+}
+
+fn build_depot_record_bindings(
+    current_kw: f64,
+    budget_kw: f64,
+    pv_kw: f64,
+    power_kw: f64,
+) -> IndexMap<String, LexValue> {
+    let mut s = IndexMap::new();
+    s.insert("current_kw".into(), LexValue::Float(current_kw));
+    s.insert("budget_kw".into(), LexValue::Float(budget_kw));
+    s.insert("pv_kw".into(), LexValue::Float(pv_kw));
+
+    let mut a = IndexMap::new();
+    a.insert("power_kw".into(), LexValue::Float(power_kw));
+
+    let mut b = IndexMap::new();
+    b.insert("s".into(), LexValue::Record(s));
+    b.insert("a".into(), LexValue::Record(a));
+    b
 }
 
 #[test]
 fn depot_grant_carries_power_kw_in_payload() {
     // The depot's GrantSession action embeds `power_kw` so the spec
-    // can check it. Without that field, `default_float_bindings`
+    // can check it. Without that field, `record_bindings`
     // wouldn't bind `power_kw` and the spec would be Inconclusive (a
     // soft-Deny under the runner's fail-safe policy). This test pins
     // the contract by exercising the gate path end-to-end and
@@ -269,7 +281,7 @@ fn depot_grant_carries_power_kw_in_payload() {
             "requested_kw": 50.0,
         }))
         .gate(gate)
-        .bindings_fn(Box::new(default_float_bindings))
+        .bindings_fn(Box::new(record_bindings))
         .build()
         .expect("runner builds");
 

@@ -1,16 +1,14 @@
 # vehicle.spec — state-of-charge reserve gate for the vehicle agent.
 #
-# Quantifies over scalar floats in the vehicle's state:
-#   - soc           : current state of charge (0.0..1.0)
-#   - energy_needed : energy this delivery will consume
-#   - reserve       : floor SOC must stay above
+# Quantifies over a record-typed `s` binding projected from the
+# vehicle's state. The action shape isn't relevant for this
+# invariant — vehicle's outgoing actions don't carry SOC data — so
+# the gate doesn't need a record-typed `a` binding here.
 #
-# Invariant: any outbound action must preserve the post-delivery
-# reserve (soc - energy_needed >= reserve). Phase 1 spec from
-# tests/phase1_specs.rs, lifted into the deploy fleet.
+# Lex-lang 0.3 (#208) shipped record-typed quantifiers and field
+# access; soft-agent's `bindings::record_bindings` forwards the
+# state JSON straight through as a `LexValue::Record`.
 spec vehicle_soc_reserve {
-  forall soc           :: Float,
-         energy_needed :: Float,
-         reserve       :: Float:
-    soc - energy_needed >= reserve
+  forall s :: { soc :: Float, reserve :: Float, energy_needed :: Float }:
+    s.soc - s.energy_needed >= s.reserve
 }
