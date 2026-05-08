@@ -1,22 +1,27 @@
-//! Default `BindingsFn` for spec gates.
+//! Default `BindingsFn`s for spec gates.
 //!
-//! [`default_float_bindings`] walks an agent's state plus the action
-//! being evaluated and emits one `LexValue::Float` binding per
-//! top-level numeric field. Action-derived bindings override
-//! state-derived bindings on collision so a spec can reason about a
-//! field both agents might carry under the same name (e.g. `power_kw`
-//! in state vs in an outgoing GrantSession payload — the latter is
-//! the value the gate should validate, since it's what the agent is
-//! committing to).
+//! [`record_bindings`] is the recommended default for soft-agent on
+//! lex-lang 0.3+: it forwards an agent's state and the action's
+//! payload (or args) as two record-typed bindings — `s` and `a` —
+//! that a spec can destructure directly via field access. This
+//! relies on lex-lang #208 (spec-checker quantifiers over user-defined
+//! ADTs and structural records).
 //!
-//! Action sources by variant:
-//!   - [`Action::SendA2a`]: walks the `payload` object.
-//!   - [`Action::CallMcp`]: walks the `args` object.
-//!   - [`Action::LocalLlm`] / [`Action::CloudLlm`]: no numeric scalars.
+//! Spec authors write:
 //!
-//! Only top-level fields are extracted; nested objects are ignored.
-//! Use a custom [`BindingsFn`](crate::BindingsFn) when a spec needs
-//! deeper structure or non-Float types.
+//! ```text
+//! spec my_invariant {
+//!   forall s :: { current_kw :: Float, budget_kw :: Float },
+//!          a :: { power_kw :: Float }:
+//!     s.current_kw + a.power_kw <= s.budget_kw
+//! }
+//! ```
+//!
+//! [`default_float_bindings`] is the legacy flattening helper kept
+//! for backward compatibility — specs that still quantify over flat
+//! scalar bindings (`forall current_kw :: Float, ...`) continue to
+//! work. New specs should prefer [`record_bindings`] for the stronger
+//! type contract and clearer scoping.
 
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
@@ -24,8 +29,76 @@ use serde_json::Value;
 
 use crate::Action;
 
-/// Default `BindingsFn` for soft-runner-style deployments. See module
-/// docs for semantics.
+/// Forwards `state` and the action's payload/args as two record-typed
+/// bindings — `s` and `a` — for use with lex-lang 0.3+ specs that
+/// quantify over records.
+///
+/// Action sources by variant:
+///   - [`Action::SendA2a`]: forwards `payload`.
+///   - [`Action::CallMcp`]: forwards `args`.
+///   - [`Action::LocalLlm`] / [`Action::CloudLlm`]: forwards an empty
+///     record (the spec body's field accesses on `a` will be
+///     undefined; specs that intentionally apply only to a/2a or MCP
+///     should add an explicit guard, or omit `a` from the quantifier).
+///
+/// Non-object JSON values (null, scalar, array) are forwarded as
+/// `LexValue::Unit`; the spec evaluator treats field access on Unit
+/// as Inconclusive (soft-Deny under the runner's policy).
+pub fn record_bindings(state: &Value, action: &Action) -> IndexMap<String, LexValue> {
+    let mut out = IndexMap::new();
+    out.insert("s".to_string(), json_to_record_value(state));
+
+    let action_obj = match action {
+        Action::SendA2a { payload, .. } => payload.clone(),
+        Action::CallMcp { args, .. } => args.clone(),
+        Action::LocalLlm { .. } | Action::CloudLlm { .. } => Value::Object(Default::default()),
+    };
+    out.insert("a".to_string(), json_to_record_value(&action_obj));
+    out
+}
+
+fn json_to_record_value(v: &Value) -> LexValue {
+    match v {
+        Value::Object(map) => {
+            let mut fields = IndexMap::new();
+            for (k, val) in map {
+                fields.insert(k.clone(), json_scalar_to_lex(val));
+            }
+            LexValue::Record(fields)
+        }
+        _ => LexValue::Unit,
+    }
+}
+
+fn json_scalar_to_lex(v: &Value) -> LexValue {
+    match v {
+        Value::Number(n) => {
+            if let Some(f) = n.as_f64() {
+                LexValue::Float(f)
+            } else if let Some(i) = n.as_i64() {
+                LexValue::Int(i)
+            } else {
+                LexValue::Unit
+            }
+        }
+        Value::Bool(b) => LexValue::Bool(*b),
+        Value::String(s) => LexValue::Str(s.clone()),
+        Value::Object(_) => json_to_record_value(v),
+        // Lists/null/etc. — not currently consumed by any deploy spec.
+        // If a future spec needs them, extend here (LexValue::List, Unit).
+        _ => LexValue::Unit,
+    }
+}
+
+/// Legacy flat-scalar `BindingsFn` for soft-agent on lex-lang 0.2 and
+/// for specs that prefer explicit scalar quantifiers. Walks state's
+/// top-level Float fields, then merges in floats from the action
+/// source: SendA2a payload, CallMcp args. Action bindings override
+/// state bindings on key collision.
+///
+/// New specs should prefer [`record_bindings`] paired with
+/// record-typed quantifiers — same contract, fewer name collisions,
+/// clearer state-vs-action provenance.
 pub fn default_float_bindings(state: &Value, action: &Action) -> IndexMap<String, LexValue> {
     let mut out = IndexMap::new();
     if let Some(obj) = state.as_object() {
@@ -63,81 +136,107 @@ mod tests {
         }
     }
 
-    #[test]
-    fn pulls_top_level_floats_from_state() {
-        let state = json!({"current_kw": 30.0, "budget_kw": 100.0, "name": "depot"});
-        let action = Action::LocalLlm {
-            prompt: "irrelevant".into(),
+    fn record_field(b: &IndexMap<String, LexValue>, rec: &str, field: &str) -> Option<LexValue> {
+        let LexValue::Record(map) = b.get(rec)? else {
+            return None;
         };
-        let b = default_float_bindings(&state, &action);
-        assert_eq!(float(&b, "current_kw"), Some(30.0));
-        assert_eq!(float(&b, "budget_kw"), Some(100.0));
-        assert!(b.get("name").is_none(), "non-numeric fields skipped");
+        map.get(field).cloned()
+    }
+
+    // ---------- record_bindings ----------
+
+    #[test]
+    fn record_bindings_forwards_state_as_s() {
+        let state = json!({"current_kw": 30.0, "budget_kw": 100.0});
+        let action = Action::LocalLlm { prompt: "p".into() };
+        let b = record_bindings(&state, &action);
+        assert_eq!(
+            record_field(&b, "s", "current_kw"),
+            Some(LexValue::Float(30.0))
+        );
+        assert_eq!(
+            record_field(&b, "s", "budget_kw"),
+            Some(LexValue::Float(100.0))
+        );
     }
 
     #[test]
-    fn pulls_top_level_floats_from_send_a2a_payload() {
-        let state = json!({"current_kw": 30.0});
+    fn record_bindings_forwards_send_a2a_payload_as_a() {
+        let state = json!({});
         let action = Action::SendA2a {
             peer: "vehicle".into(),
             topic: "GrantSession".into(),
             payload: json!({"power_kw": 50, "charger_id": "c-1"}),
         };
-        let b = default_float_bindings(&state, &action);
-        assert_eq!(float(&b, "current_kw"), Some(30.0));
-        assert_eq!(float(&b, "power_kw"), Some(50.0));
-        assert!(b.get("charger_id").is_none());
+        let b = record_bindings(&state, &action);
+        assert_eq!(
+            record_field(&b, "a", "power_kw"),
+            Some(LexValue::Float(50.0))
+        );
+        assert_eq!(
+            record_field(&b, "a", "charger_id"),
+            Some(LexValue::Str("c-1".into()))
+        );
     }
 
     #[test]
-    fn pulls_top_level_floats_from_call_mcp_args() {
-        let state = json!({"soc": 0.85});
+    fn record_bindings_forwards_call_mcp_args_as_a() {
+        let state = json!({});
         let action = Action::CallMcp {
             server: "telemetry".into(),
             tool: "report".into(),
-            args: json!({"voltage": 240.0, "label": "main"}),
+            args: json!({"voltage": 240}),
         };
-        let b = default_float_bindings(&state, &action);
-        assert_eq!(float(&b, "soc"), Some(0.85));
-        assert_eq!(float(&b, "voltage"), Some(240.0));
-        assert!(b.get("label").is_none());
+        let b = record_bindings(&state, &action);
+        assert_eq!(
+            record_field(&b, "a", "voltage"),
+            Some(LexValue::Float(240.0))
+        );
     }
 
     #[test]
-    fn action_overrides_state_on_key_collision() {
-        let state = json!({"power_kw": 10.0, "budget_kw": 100.0});
+    fn record_bindings_for_llm_action_yields_empty_a() {
+        let state = json!({"k": 1.0});
+        let action = Action::LocalLlm { prompt: "p".into() };
+        let b = record_bindings(&state, &action);
+        let LexValue::Record(map) = b.get("a").unwrap() else {
+            panic!("expected Record for `a`");
+        };
+        assert!(map.is_empty(), "LLM actions carry no record-shaped data");
+    }
+
+    #[test]
+    fn record_bindings_non_object_state_yields_unit_s() {
+        let state = json!("not an object");
+        let action = Action::LocalLlm { prompt: "p".into() };
+        let b = record_bindings(&state, &action);
+        assert!(matches!(b.get("s"), Some(LexValue::Unit)));
+    }
+
+    // ---------- default_float_bindings (regression) ----------
+
+    #[test]
+    fn legacy_default_float_bindings_still_works() {
+        let state = json!({"current_kw": 30.0});
         let action = Action::SendA2a {
             peer: "v".into(),
             topic: "Grant".into(),
             payload: json!({"power_kw": 50.0}),
         };
         let b = default_float_bindings(&state, &action);
-        // Action's power_kw shadows state's.
+        assert_eq!(float(&b, "current_kw"), Some(30.0));
         assert_eq!(float(&b, "power_kw"), Some(50.0));
-        // State-only fields still come through.
-        assert_eq!(float(&b, "budget_kw"), Some(100.0));
     }
 
     #[test]
-    fn empty_state_and_non_numeric_action_yields_empty_bindings() {
-        let state = json!({});
+    fn legacy_action_overrides_state_on_collision() {
+        let state = json!({"power_kw": 10.0});
         let action = Action::SendA2a {
-            peer: "x".into(),
-            topic: "Y".into(),
-            payload: json!({"only": "strings"}),
+            peer: "v".into(),
+            topic: "G".into(),
+            payload: json!({"power_kw": 50.0}),
         };
         let b = default_float_bindings(&state, &action);
-        assert!(b.is_empty());
-    }
-
-    #[test]
-    fn local_and_cloud_llm_actions_contribute_no_bindings() {
-        let state = json!({"k": 1.0});
-        let local = Action::LocalLlm { prompt: "p".into() };
-        let cloud = Action::CloudLlm { prompt: "p".into() };
-        let bl = default_float_bindings(&state, &local);
-        let bc = default_float_bindings(&state, &cloud);
-        assert_eq!(bl.len(), 1);
-        assert_eq!(bc.len(), 1);
+        assert_eq!(float(&b, "power_kw"), Some(50.0));
     }
 }

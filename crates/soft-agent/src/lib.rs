@@ -34,7 +34,7 @@ pub mod trace;
 
 pub use action::Action;
 pub use agent::{Agent, AgentConfig, AgentId};
-pub use bindings::default_float_bindings;
+pub use bindings::{default_float_bindings, record_bindings};
 pub use effect::{Effect, EffectSet};
 pub use error::Error;
 pub use executor::{ActionExecutor, ExecError, MockExecutor};

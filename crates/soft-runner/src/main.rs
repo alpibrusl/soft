@@ -36,7 +36,7 @@ use lex_runtime::Policy;
 use serde_json::Value;
 use soft_a2a::{A2aRoutedExecutor, A2aServer, AgentCard};
 use soft_agent::{
-    default_float_bindings, Gate, LexHost, Mailbox, Metrics, Runner, StepReport, DSL_PREAMBLE,
+    record_bindings, Gate, LexHost, Mailbox, Metrics, Runner, StepReport, DSL_PREAMBLE,
 };
 
 use crate::anthropic::AnthropicCloudHandler;
@@ -284,9 +284,7 @@ fn main() -> ExitCode {
             gate.spec_count(),
             spec_paths.join(", ")
         );
-        builder = builder
-            .gate(gate)
-            .bindings_fn(Box::new(default_float_bindings));
+        builder = builder.gate(gate).bindings_fn(Box::new(record_bindings));
     }
 
     let metrics = Arc::new(Metrics::new(&agent_name));
