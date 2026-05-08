@@ -20,5 +20,7 @@ serde_json = { workspace = true }
 tiny_http  = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
-ureq     = { workspace = true }
+tempfile   = "3"
+ureq       = { workspace = true }
+# End-to-end search test produces a real trace via soft-agent's runner.
+soft-agent = { path = "../soft-agent" }
