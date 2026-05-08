@@ -61,10 +61,11 @@ fn scan_counts_allow_runs_correctly() {
     assert_eq!(c.executed, 1);
     assert_eq!(c.allowed, 0, "no gate ⇒ no verdicts recorded");
     assert_eq!(c.denied, 0);
-    // Note: `has_violation` would say true here because executed > allowed,
-    // but that's expected — this run had no gate. `soft-replay` flags
-    // ungated runs as violations, which is the right default for an
-    // audit pass.
+    assert!(!c.is_gated(), "no gate.verdict events ⇒ ungated");
+    assert!(
+        !c.has_violation(),
+        "ungated runs are not violations — there's no Deny to bypass"
+    );
 }
 
 #[test]

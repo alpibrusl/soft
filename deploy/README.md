@@ -75,15 +75,14 @@ run_id...         proposed  allowed  denied  inconclusive  executed  skipped
 <...>                   2        0       0             0         2        0   ← VIOLATION: executed > allowed
 ```
 
-> **Note on the remaining "violation".** `soft-replay`'s `has_violation`
-> predicate is `executed > allowed`, which is conservative: an *ungated* run
-> (one with no `gate.verdict` events) gets flagged because every executed
-> action lacks a corresponding `Allow` verdict. The vehicle and depot agents
-> now ship spec gates (`agents/vehicle.spec`, `agents/depot.spec`); the pv
-> agent has no meaningful invariant to encode (it just emits ticks) and so
-> still trips the flag. Treat the remaining flag as "you ran an ungated
-> agent," not "an action bypassed Deny." Improving `soft-replay` to skip
-> ungated runs would close the false positive entirely.
+> **Note on ungated agents.** `soft-replay` only flags runs as violations
+> when the gate was actually invoked (i.e. some `gate.verdict` event was
+> recorded) AND `executed > allowed`. Runs without a configured spec gate
+> — like the pv agent, which just emits ticks — get a separate
+> `(ungated — no spec gate)` annotation but are not counted as
+> violations: there's no Deny to bypass. See
+> [`Counts::is_gated`](../crates/soft-agent/src/replay.rs) for the
+> precise predicate.
 
 ## Running by hand
 
