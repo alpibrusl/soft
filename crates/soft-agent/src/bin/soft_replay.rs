@@ -69,6 +69,12 @@ fn main() -> ExitCode {
                 if counts.has_violation() {
                     violations += 1;
                     println!("{row}  ← VIOLATION: executed > allowed");
+                } else if !counts.is_gated() && counts.executed > 0 {
+                    // Informational, not an error. Ungated runs are
+                    // the responsibility of whoever configured the
+                    // agent without a spec gate; soft-replay just
+                    // surfaces the fact.
+                    println!("{row}  (ungated — no spec gate)");
                 } else {
                     println!("{row}");
                 }
