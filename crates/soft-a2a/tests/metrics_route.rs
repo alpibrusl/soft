@@ -76,6 +76,26 @@ fn metrics_returns_prometheus_text_when_wired() {
 }
 
 #[test]
+fn metrics_route_renders_histogram_format() {
+    use std::time::Duration;
+
+    let m = Arc::new(Metrics::new("hist-route"));
+    m.observe_step_duration("Processed", Duration::from_millis(7));
+    m.observe_action_execute_duration("send_a2a", Duration::from_millis(3));
+
+    let addr = boot(Some(Arc::clone(&m)));
+    let (status, body, _) = get(&addr, "/metrics");
+    assert_eq!(status, 200);
+
+    // Histogram preamble + a representative bucket + sum + count.
+    assert!(body.contains("# TYPE soft_step_duration_seconds histogram"));
+    assert!(body.contains("soft_step_duration_seconds_bucket{outcome=\"Processed\",le=\"0.01\"} 1"));
+    assert!(body.contains("soft_step_duration_seconds_count{outcome=\"Processed\"} 1"));
+    assert!(body
+        .contains("soft_action_execute_duration_seconds_bucket{kind=\"send_a2a\",le=\"0.005\"} 1"));
+}
+
+#[test]
 fn metrics_reflects_concurrent_increments() {
     let m = Arc::new(Metrics::new("concur"));
     let addr = boot(Some(Arc::clone(&m)));

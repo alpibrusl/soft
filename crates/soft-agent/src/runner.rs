@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use indexmap::IndexMap;
 use lex_bytecode::Value as LexValue;
@@ -143,10 +143,13 @@ impl Runner {
     /// Process at most one inbound message. Returns [`StepReport::Idle`]
     /// if the mailbox is empty.
     pub fn step(&mut self) -> Result<StepReport, Error> {
+        let step_start = Instant::now();
         let msg = match self.mailbox.try_recv() {
             Some(m) => m,
             None => {
                 self.metrics.inc_step("Idle");
+                self.metrics
+                    .observe_step_duration("Idle", step_start.elapsed());
                 return Ok(StepReport::Idle);
             }
         };
@@ -169,6 +172,8 @@ impl Runner {
             Ok(p) => p,
             Err(e) => {
                 self.metrics.inc_step("Error");
+                self.metrics
+                    .observe_step_duration("Error", step_start.elapsed());
                 return Err(e);
             }
         };
@@ -244,7 +249,10 @@ impl Runner {
             // Execute. Executor errors don't count as denials — the
             // action passed all gates; the failure is downstream and is
             // recorded in the trace's `action.executed` outcome.
+            let exec_start = Instant::now();
             let outcome = self.executor.execute(action).map_err(|e| e.to_string());
+            self.metrics
+                .observe_action_execute_duration(kind, exec_start.elapsed());
             self.trace
                 .record_effect("action.executed", summary, outcome);
             self.metrics.inc_action_allowed(kind);
@@ -252,6 +260,8 @@ impl Runner {
         }
 
         self.metrics.inc_step("Processed");
+        self.metrics
+            .observe_step_duration("Processed", step_start.elapsed());
         Ok(StepReport::Processed { allowed, denied })
     }
 
