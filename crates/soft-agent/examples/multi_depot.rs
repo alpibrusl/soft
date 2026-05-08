@@ -16,155 +16,17 @@ use serde_json::{json, Value};
 use soft_agent::{A2aMessage, Action, Gate, InProcessRouter, Mailbox, MailboxSender, Runner};
 use tempfile::tempdir;
 
-const HOST: &str = r#"
-fn projected_load(current :: Float, delta :: Float) -> Float {
-  current + delta
-}
+const HOST: &str = include_str!("lex/multi_depot_host.lex");
 
-fn budget_total(grid :: Float, pv :: Float) -> Float {
-  grid + pv
-}
+const GRID_BUDGET_SPEC: &str = include_str!("lex/grid_budget.spec");
 
-fn under_budget(current :: Float, delta :: Float, grid :: Float, pv :: Float) -> Bool {
-  projected_load(current, delta) <= budget_total(grid, pv)
-}
+const SOC_RESERVE_SPEC: &str = include_str!("lex/soc_reserve.spec");
 
-fn soc_after(current :: Float, used :: Float) -> Float {
-  current - used
-}
+const VEHICLE_LEX: &str = include_str!("lex/multi_depot_vehicle.lex");
 
-fn above_reserve(current :: Float, used :: Float, reserve :: Float) -> Bool {
-  soc_after(current, used) >= reserve
-}
-"#;
+const DEPOT_LEX: &str = include_str!("lex/multi_depot_depot.lex");
 
-const GRID_BUDGET_SPEC: &str = r#"
-spec grid_budget {
-  forall current_kw :: Float, delta_kw :: Float, grid_kw :: Float, pv_kw :: Float:
-    under_budget(current_kw, delta_kw, grid_kw, pv_kw)
-}
-"#;
-
-const SOC_RESERVE_SPEC: &str = r#"
-spec soc_reserve {
-  forall current_soc :: Float, energy_used :: Float, reserve :: Float:
-    above_reserve(current_soc, energy_used, reserve)
-}
-"#;
-
-const VEHICLE_LEX: &str = r#"
-fn config() -> AgentConfig {
-  agent_new("vehicle")
-  |> agent_peers(["depot", "tms"])
-  |> agent_effects(["a2a"])
-  |> agent_specs(["specs/soc_reserve.spec"])
-  |> agent_handles([
-       { topic: "Dispatch",     fn_name: "on_dispatch" },
-       { topic: "GrantSession", fn_name: "on_grant" },
-       { topic: "DenySession",  fn_name: "on_deny" },
-     ])
-}
-
-fn enough_soc(soc :: Float, energy :: Float, reserve :: Float) -> Bool {
-  soc - energy >= reserve
-}
-
-fn on_dispatch(
-  state :: { soc :: Float, reserve :: Float, energy_needed :: Float },
-  msg   :: { from :: Str, topic :: Str, payload_json :: Str },
-) -> List[ActionRecord] {
-  if enough_soc(state.soc, state.energy_needed, state.reserve) {
-    [{
-      kind: "send_a2a", server: "", tool: "", args_json: "",
-      peer: msg.from, a2a_topic: "Acknowledge",
-      payload_json: "{\"delivery_id\":\"d-1\"}", prompt: "",
-    }]
-  } else {
-    [{
-      kind: "send_a2a", server: "", tool: "", args_json: "",
-      peer: "depot", a2a_topic: "RequestSession",
-      payload_json: "{\"vehicle_id\":\"v-1\",\"power_kw\":50}", prompt: "",
-    }]
-  }
-}
-
-fn on_grant(
-  state :: { soc :: Float, reserve :: Float, energy_needed :: Float },
-  msg   :: { from :: Str, topic :: Str, payload_json :: Str },
-) -> List[ActionRecord] {
-  [{
-    kind: "send_a2a", server: "", tool: "", args_json: "",
-    peer: "tms", a2a_topic: "Complete",
-    payload_json: "{\"delivery_id\":\"d-1\"}", prompt: "",
-  }]
-}
-
-fn on_deny(
-  state :: { soc :: Float, reserve :: Float, energy_needed :: Float },
-  msg   :: { from :: Str, topic :: Str, payload_json :: Str },
-) -> List[ActionRecord] {
-  [{
-    kind: "send_a2a", server: "", tool: "", args_json: "",
-    peer: "tms", a2a_topic: "Failed",
-    payload_json: "{\"reason\":\"depot_denied\"}", prompt: "",
-  }]
-}
-"#;
-
-const DEPOT_LEX: &str = r#"
-fn config() -> AgentConfig {
-  agent_new("depot")
-  |> agent_peers(["vehicle"])
-  |> agent_effects(["a2a"])
-  |> agent_specs(["specs/grid_budget.spec"])
-  |> agent_handles([
-       { topic: "RequestSession", fn_name: "on_request_session" },
-     ])
-}
-
-fn within(current :: Float, delta :: Float, grid :: Float, pv :: Float) -> Bool {
-  current + delta <= grid + pv
-}
-
-fn on_request_session(
-  state :: { current_kw :: Float, budget_kw :: Float, pv_kw :: Float, requested_kw :: Float },
-  msg   :: { from :: Str, topic :: Str, payload_json :: Str },
-) -> List[ActionRecord] {
-  if within(state.current_kw, state.requested_kw, state.budget_kw, state.pv_kw) {
-    [{
-      kind: "send_a2a", server: "", tool: "", args_json: "",
-      peer: msg.from, a2a_topic: "GrantSession",
-      payload_json: "{\"charger_id\":\"c-1\"}", prompt: "",
-    }]
-  } else {
-    [{
-      kind: "send_a2a", server: "", tool: "", args_json: "",
-      peer: msg.from, a2a_topic: "DenySession",
-      payload_json: "{\"reason\":\"grid_budget\"}", prompt: "",
-    }]
-  }
-}
-"#;
-
-const TMS_LEX: &str = r#"
-fn config() -> AgentConfig {
-  agent_new("tms")
-  |> agent_peers(["vehicle"])
-  |> agent_effects(["a2a"])
-  |> agent_handles([
-       { topic: "Acknowledge", fn_name: "terminate" },
-       { topic: "Complete",    fn_name: "terminate" },
-       { topic: "Failed",      fn_name: "terminate" },
-     ])
-}
-
-fn terminate(
-  state :: { running :: Bool },
-  msg   :: { from :: Str, topic :: Str, payload_json :: Str },
-) -> List[ActionRecord] {
-  []
-}
-"#;
+const TMS_LEX: &str = include_str!("lex/multi_depot_tms.lex");
 
 #[derive(Clone)]
 struct Scenario {
