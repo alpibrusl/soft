@@ -1839,6 +1839,7 @@ dependencies = [
  "lex-store",
  "serde",
  "serde_json",
+ "soft-agent",
  "tempfile",
  "tiny_http",
  "ureq 2.12.1",

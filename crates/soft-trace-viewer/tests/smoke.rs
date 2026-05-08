@@ -118,3 +118,139 @@ fn unknown_path_returns_404() {
     };
     assert_eq!(status, 404);
 }
+
+#[test]
+fn search_with_no_q_returns_empty() {
+    let dir = tempdir().unwrap();
+    let port = pick_ephemeral_port();
+    let _proc = spawn(dir.path().to_str().unwrap(), port);
+
+    let url = format!("http://127.0.0.1:{port}/api/search");
+    let resp = ureq::get(&url)
+        .timeout(Duration::from_secs(2))
+        .call()
+        .expect("GET /api/search");
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.into_json().unwrap();
+    assert_eq!(body["results"], serde_json::json!([]));
+    assert_eq!(body["query"], "");
+}
+
+#[test]
+fn search_empty_store_returns_zero_results() {
+    let dir = tempdir().unwrap();
+    let port = pick_ephemeral_port();
+    let _proc = spawn(dir.path().to_str().unwrap(), port);
+
+    let url = format!("http://127.0.0.1:{port}/api/search?q=anything");
+    let resp = ureq::get(&url)
+        .timeout(Duration::from_secs(2))
+        .call()
+        .expect("GET /api/search?q=…");
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.into_json().unwrap();
+    assert_eq!(body["results"], serde_json::json!([]));
+    assert_eq!(body["scanned"], 0);
+    assert_eq!(body["query"], "anything");
+}
+
+#[test]
+fn search_url_decodes_query() {
+    let dir = tempdir().unwrap();
+    let port = pick_ephemeral_port();
+    let _proc = spawn(dir.path().to_str().unwrap(), port);
+
+    // %20 → space, + → space.
+    let url = format!("http://127.0.0.1:{port}/api/search?q=hello%20world");
+    let resp = ureq::get(&url)
+        .timeout(Duration::from_secs(2))
+        .call()
+        .expect("GET");
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.into_json().unwrap();
+    assert_eq!(body["query"], "hello world");
+
+    let url = format!("http://127.0.0.1:{port}/api/search?q=hello+world");
+    let resp = ureq::get(&url)
+        .timeout(Duration::from_secs(2))
+        .call()
+        .expect("GET");
+    let body: serde_json::Value = resp.into_json().unwrap();
+    assert_eq!(body["query"], "hello world");
+}
+
+#[test]
+fn search_finds_matching_trace_via_real_runner() {
+    // End-to-end: drive a real soft-agent runner, persist a trace,
+    // then start the viewer against the same store and verify search
+    // finds a known token from the agent's outbound message.
+    use serde_json::json;
+    use soft_agent::{A2aMessage, Action, AgentConfig, Effect, Mailbox, Runner};
+
+    let dir = tempdir().unwrap();
+    let store = lex_store::Store::open(dir.path()).unwrap();
+
+    let agent = AgentConfig::new("vehicle")
+        .peers(["depot"])
+        .effects([Effect::A2a])
+        .build()
+        .unwrap();
+    let (mailbox, sender) = Mailbox::new();
+    let mut runner = Runner::builder()
+        .agent(agent)
+        .state(json!({}))
+        .mailbox(mailbox)
+        .handle("Dispatch", |_state, msg| {
+            vec![Action::SendA2a {
+                peer: msg.from.clone(),
+                topic: "Acknowledge".into(),
+                payload: json!({"unique_token_searchable": true}),
+            }]
+        })
+        .build()
+        .unwrap();
+
+    sender
+        .send(A2aMessage {
+            from: "tester".into(),
+            topic: "Dispatch".into(),
+            payload: json!({}),
+        })
+        .unwrap();
+    runner.drain().unwrap();
+    runner.finalize(&store).unwrap();
+
+    let port = pick_ephemeral_port();
+    let _proc = spawn(dir.path().to_str().unwrap(), port);
+
+    // Search for the token we embedded in the SendA2a payload.
+    let url = format!("http://127.0.0.1:{port}/api/search?q=unique_token_searchable");
+    let resp = ureq::get(&url)
+        .timeout(Duration::from_secs(2))
+        .call()
+        .expect("GET search");
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.into_json().unwrap();
+    let results = body["results"].as_array().expect("results array");
+    assert_eq!(
+        results.len(),
+        1,
+        "expected exactly one trace to match, got: {body}"
+    );
+    let snippet = results[0]["snippet"].as_str().unwrap();
+    assert!(
+        snippet.contains("unique_token_searchable"),
+        "snippet should include the matched substring; got: {snippet}"
+    );
+
+    // Negative case: an unrelated query returns no results.
+    let url = format!("http://127.0.0.1:{port}/api/search?q=definitely_not_in_any_trace_zzz");
+    let body: serde_json::Value = ureq::get(&url)
+        .timeout(Duration::from_secs(2))
+        .call()
+        .unwrap()
+        .into_json()
+        .unwrap();
+    assert_eq!(body["results"], serde_json::json!([]));
+    assert_eq!(body["scanned"], 1);
+}
