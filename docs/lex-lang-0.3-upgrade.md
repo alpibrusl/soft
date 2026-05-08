@@ -1,8 +1,18 @@
 # lex-lang 0.3 upgrade — soft-agent impact
 
-**Status**: lex-lang [PR #230](https://github.com/alpibrusl/lex-lang/pull/230) merged
-2026-05-07. Once a `0.3.0` is published, soft can bump its workspace pin
-from `0.2` to `0.3`.
+**Status**: ✅ landed in soft. lex-lang `0.3.0` published 2026-05-08;
+workspace pinned to `0.3` and verified end-to-end (full test suite +
+`deploy/run-local.sh` happy path) on the same date. The breaking
+changes (`EffectSet.concrete: BTreeSet<EffectKind>`, `Value::Closure {
+body_hash }`) had zero impact on soft-agent — neither type is
+pattern-matched anywhere in our crates.
+
+Open follow-ups from the original §"Open follow-ups upstream" section
+have all closed in the 0.3 train: #208 (spec-checker over ADTs +
+bounded list quantifiers), #209 (refinement types), #206 (canonical
+AST as primary compilation surface). The `BindingsFn` flattening
+helper called out in §208's note is now retire-able as a separate
+slice.
 
 This document captures what changed upstream, what soft-agent has to
 do (almost nothing), and what soft-agent *can* do to take advantage of

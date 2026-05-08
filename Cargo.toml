@@ -15,17 +15,19 @@ authors = ["soft contributors"]
 repository = "https://github.com/alpibrusl/soft"
 
 [workspace.dependencies]
-# lex-lang v0.2.0 (published 2026-05-06; closes #184–#187 via PRs #189–#192).
-# SemVer-pinned to "0.2"; breaking changes upstream bump to 0.3+.
-lex-syntax   = "0.2"
-lex-ast      = "0.2"
-lex-types    = "0.2"
-lex-bytecode = "0.2"
-lex-runtime  = "0.2"
-lex-store    = "0.2"
-lex-trace    = "0.2"
-lex-api      = "0.2"
-spec-checker = "0.2"
+# lex-lang v0.3.0 (published 2026-05-08; closes #206–#209, #216–#219, #221–#225,
+# #227, #240 via the 0.3 train). SemVer-pinned to "0.3"; the breaking changes
+# (`EffectSet.concrete` shape, `Value::Closure { body_hash }`) don't affect
+# soft-agent — see docs/lex-lang-0.3-upgrade.md for the audit.
+lex-syntax   = "0.3"
+lex-ast      = "0.3"
+lex-types    = "0.3"
+lex-bytecode = "0.3"
+lex-runtime  = "0.3"
+lex-store    = "0.3"
+lex-trace    = "0.3"
+lex-api      = "0.3"
+spec-checker = "0.3"
 
 indexmap   = "2"
 serde      = { version = "1", features = ["derive"] }
