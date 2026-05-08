@@ -50,6 +50,17 @@ fn on_decide(
   # client; before v0.2.2 it was a stub. The result is `Result[Str, Str]`.
   # The `[llm_local]` effect on this function's return type is what
   # promotes the call from "type error" to "allowed". Compile-time check.
+  #
+  # Note: lex 0.3 ships a `[budget(N)]` effect (#225). Adding it here
+  # would be documentation-only today: when soft-runner invokes
+  # on_decide via `host.call(...)` (a Rust → Lex entry), the runtime
+  # doesn't charge N for the entry call itself — only Lex-internal
+  # `Op::Call`s deduct. With on_decide making just one stdlib call and
+  # one local helper call, neither of which currently declares a
+  # matching `[budget(N)]`, no deduction would happen. See
+  # `crates/soft-agent/tests/budget_probe.rs` for the pinned semantics.
+  # `--budget N` on soft-run still constrains agents whose handlers
+  # call into matching-budget Lex helpers.
   let answer := unwrap_or(agent.local_complete(state.prompt), "(llm unavailable)")
   [{
     kind: "send_a2a", server: "", tool: "", args_json: "",

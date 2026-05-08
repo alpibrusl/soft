@@ -57,6 +57,7 @@ struct Args {
     store: Option<PathBuf>,
     llm_cloud_provider: LlmCloudProvider,
     shutdown_token: Option<String>,
+    budget: Option<u64>,
 }
 
 fn usage_exit(msg: &str) -> ! {
@@ -69,6 +70,8 @@ fn usage_exit(msg: &str) -> ! {
             [--bind <addr>]                   (default 127.0.0.1) \\\n  \
             [--store <path>]                  (persist trace on shutdown) \\\n  \
             [--llm-cloud-provider <name>]     (default | anthropic) \\\n  \
+            [--budget <N>]                    (lex 0.3 [budget(N)] ceiling; \
+no flag = unbounded) \\\n  \
             [--shutdown-token <T>]            (or SOFT_SHUTDOWN_TOKEN env; \
 required when --bind is non-loopback)"
     );
@@ -106,6 +109,9 @@ fn parse_args() -> Args {
     let mut store = None;
     let mut llm_cloud_provider = LlmCloudProvider::Default;
     let mut shutdown_token: Option<String> = std::env::var("SOFT_SHUTDOWN_TOKEN").ok();
+    let mut budget: Option<u64> = std::env::var("SOFT_BUDGET")
+        .ok()
+        .and_then(|s| s.parse().ok());
 
     while let Some(flag) = iter.next() {
         match flag.as_str() {
@@ -173,6 +179,15 @@ fn parse_args() -> Args {
                     )),
                 };
             }
+            "--budget" => {
+                let v = iter
+                    .next()
+                    .unwrap_or_else(|| usage_exit("--budget needs a u64 ceiling"));
+                budget = Some(
+                    v.parse()
+                        .unwrap_or_else(|e| usage_exit(&format!("--budget: {e}"))),
+                );
+            }
             other => usage_exit(&format!("unknown flag: `{other}`")),
         }
     }
@@ -193,6 +208,7 @@ to protect POST /shutdown. Use --bind 127.0.0.1 for local-only, or supply a toke
         ticks,
         store,
         llm_cloud_provider,
+        budget,
         shutdown_token,
     }
 }
@@ -227,9 +243,10 @@ fn main() -> ExitCode {
         }
     };
 
+    let policy = make_policy(args.budget);
     let host = match args.llm_cloud_provider {
-        LlmCloudProvider::Default => host,
-        LlmCloudProvider::Anthropic => match install_anthropic_handler(host) {
+        LlmCloudProvider::Default => host.with_policy(policy.clone()),
+        LlmCloudProvider::Anthropic => match install_anthropic_handler(host, policy.clone()) {
             Ok(h) => h,
             Err(msg) => {
                 eprintln!("--llm-cloud-provider anthropic: {msg}");
@@ -343,7 +360,7 @@ fn main() -> ExitCode {
     };
 
     eprintln!(
-        "soft-run: agent `{agent_name}` on http://{listen}  peers={}{}{}{}",
+        "soft-run: agent `{agent_name}` on http://{listen}  peers={}{}{}{}{}",
         format_peers(&args.peers),
         format_ticks(&args.ticks),
         match args.store {
@@ -353,6 +370,10 @@ fn main() -> ExitCode {
         match args.llm_cloud_provider {
             LlmCloudProvider::Default => "",
             LlmCloudProvider::Anthropic => "  llm_cloud=anthropic",
+        },
+        match args.budget {
+            Some(n) => format!("  budget={n}"),
+            None => String::new(),
         },
     );
     let _server_handle = server.spawn();
@@ -402,18 +423,27 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn install_anthropic_handler(host: LexHost) -> Result<LexHost, String> {
+fn install_anthropic_handler(host: LexHost, policy: Policy) -> Result<LexHost, String> {
     if std::env::var("ANTHROPIC_API_KEY").is_err() {
         return Err("ANTHROPIC_API_KEY env var not set".into());
     }
-    Ok(host.with_handler_factory(|| {
+    Ok(host.with_handler_factory(move || {
         // `from_env` re-reads env per call; cheap, and gives users
         // hot-reload of model / max-tokens between calls.
         Box::new(
-            AnthropicCloudHandler::from_env(Policy::permissive())
+            AnthropicCloudHandler::from_env(policy.clone())
                 .expect("ANTHROPIC_API_KEY checked at startup"),
         )
     }))
+}
+
+/// Build the lex Policy applied to every handler. Today only the
+/// `[budget(N)]` ceiling is configurable here; future per-call
+/// policy bits (effect allowlist, time limits) will land alongside.
+fn make_policy(budget: Option<u64>) -> Policy {
+    let mut p = Policy::permissive();
+    p.budget = budget;
+    p
 }
 
 fn format_peers(peers: &HashMap<String, String>) -> String {

@@ -92,6 +92,21 @@ impl LexHost {
         self
     }
 
+    /// Install a `DefaultHandler` initialized with a non-default
+    /// [`Policy`]. The most common reason to call this is to set
+    /// `policy.budget = Some(N)` so the lex 0.3 `[budget(N)]` effect
+    /// is enforced — calls deduct from the shared pool atomically and
+    /// fail with `"budget exceeded: requested N, used so far M,
+    /// ceiling C"` when exhausted.
+    ///
+    /// Cannot be combined with [`Self::with_handler_factory`] — the
+    /// last call wins.
+    pub fn with_policy(self, policy: Policy) -> Self {
+        self.with_handler_factory(move || -> Box<dyn EffectHandler> {
+            Box::new(DefaultHandler::new(policy.clone()))
+        })
+    }
+
     /// Call a Lex function by name with the given arguments.
     ///
     /// Returns the function's value plus a [`TraceTree`] capturing call
